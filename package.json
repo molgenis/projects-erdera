@@ -1,0 +1,14 @@
+{
+    "name": "projects-erdera",
+    "version": "1.0.0",
+    "main": "index.js",
+    "repository": "https://github.com/molgenis/projects-erdera.git",
+    "author": "dcruvolo <davidruvolo51@gmail.com>",
+    "license": "MIT",
+    "devDependencies": {
+        "vitest": "^3.2.4"
+    },
+    "scripts": {
+        "test": "vitest"
+    }
+}
