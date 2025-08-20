@@ -1,7 +1,11 @@
 """Extract expressions from javascript files and insert them into the molgenis.csv"""
-from os import listdir
+from os import listdir, environ
+from dotenv import load_dotenv
 import re
 import pandas as pd
+from molgenis_emx2_pyclient import Client
+load_dotenv()
+import asyncio
 
 
 def get_js_files(path_to_dir: str):
@@ -17,6 +21,8 @@ def extract_js_file_content(js_file: str):
 
     parsed_js = {
         'tableName': '',
+        'tableExtends': '',
+        'tableType': '',
         'columnName': '',
         'js': ''
     }
@@ -43,7 +49,34 @@ def extract_js_file_content(js_file: str):
             parsed_js['js'] = parsed_js['js'] + clean_js_line
 
     parsed_js['js'] = f"{parsed_js['js']};{func_call}"
+    
+    # set the js code in the corresponding expression column
+    expressionType = parsed_js['expressionType']
+    parsed_js[expressionType] = parsed_js.pop('js')
+    del parsed_js['expressionType'] # remove unnecessary column 
+
     return parsed_js
+
+def get_schema(schema: str):
+    """Retrieve the latest molgenis, in which the expressions need to be added"""
+    with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
+        tmp = client.get_schema_metadata('test')
+    return tmp
+
+
+async def upload_schema(path_to_molgenis: str):
+    """Upload the molgenis scheme with the expressions"""
+    # emx2 = Client(
+    #     'https://willemijn.molgenis.net',
+    #     schema='test',
+    #     token=environ['MOLGENIS_EMX2_TOKEN']
+    # )
+
+    async with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
+        # client.signin()
+        await client.upload_file(file_path=path_to_molgenis, schema='test')
+
+    # emx2.upload_file(file_path=path_to_molgenis, schema='test')
 
 
 if __name__ == "__main__":
@@ -55,3 +88,8 @@ if __name__ == "__main__":
         schema_metadata.append(extract_js_file_content(js_file=file))
 
     schema_metadata_df = pd.DataFrame(schema_metadata)
+
+    path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
+    schema_metadata_df.to_csv(path_to_molgenis, index=False)
+    asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))
+
