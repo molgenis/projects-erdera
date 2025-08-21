@@ -1,11 +1,17 @@
 """Extract expressions from javascript files and insert them into the molgenis.csv"""
+import asyncio
 from os import listdir, environ
-from dotenv import load_dotenv
 import re
+from io import StringIO
+from dotenv import load_dotenv
 import pandas as pd
 from molgenis_emx2_pyclient import Client
 load_dotenv()
-import asyncio
+
+
+def check_url_ending(url: str):
+    """If a URL does not end a forward slash, then add it"""
+    return url if url.endswith("/") else f"{url}/"
 
 
 def get_js_files(path_to_dir: str):
@@ -23,19 +29,22 @@ def extract_js_file_content(js_file: str):
         'tableName': '',
         'tableExtends': '',
         'tableType': '',
-        'columnName': '',
-        'js': ''
+        'columnName': ''
     }
 
     func_call = ''
     should_parse_js = False
+    expression_type = ''
+
     for line in contents:
         if "@tag" in line:
             schema_info = re.sub(r'(@|tag|\*|\n)', '', line).strip()
+            expression_type = schema_info.split(".")[2]
+            parsed_js[expression_type] = ''
+
             parsed_js['tableName'] = schema_info.split(".")[0]
             parsed_js['columnName'] = schema_info.split(".")[
                 1].replace("_", " ")
-            parsed_js['expressionType'] = schema_info.split(".")[2]
 
         if re.match(r'^(export)', line):
             should_parse_js = True
@@ -46,40 +55,44 @@ def extract_js_file_content(js_file: str):
             clean_js_line = re.sub(
                 r'(export|default|\n)', '', line
             ).strip()
-            parsed_js['js'] = parsed_js['js'] + clean_js_line
+            parsed_js[expression_type] = parsed_js[expression_type] + \
+                clean_js_line
 
-    parsed_js['js'] = f"{parsed_js['js']};{func_call}"
-    
-    # set the js code in the corresponding expression column
-    expressionType = parsed_js['expressionType']
-    parsed_js[expressionType] = parsed_js.pop('js')
-    del parsed_js['expressionType'] # remove unnecessary column 
-
+    parsed_js[expression_type] = f"{parsed_js[expression_type]};{func_call}"
     return parsed_js
 
-def get_schema(schema: str):
+
+def get_schema(host: str, schema: str):
     """Retrieve the latest molgenis, in which the expressions need to be added"""
-    with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
-        tmp = client.get_schema_metadata('test')
-    return tmp
+    with Client(host, token=environ['MOLGENIS_HOST_TOKEN']) as client:
+        url = f"{host}{schema}/api/csv"
+        response = client.session.get(url)
+        schema_csv_string = StringIO(response.text)
+        data = pd.read_csv(schema_csv_string, sep=",")
+        return data
 
 
-async def upload_schema(path_to_molgenis: str):
-    """Upload the molgenis scheme with the expressions"""
-    # emx2 = Client(
-    #     'https://willemijn.molgenis.net',
-    #     schema='test',
-    #     token=environ['MOLGENIS_EMX2_TOKEN']
-    # )
+# async def upload_schema(path_to_molgenis: str):
+#     """Upload the molgenis scheme with the expressions"""
+#     # emx2 = Client(
+#     #     'https://willemijn.molgenis.net',
+#     #     schema='test',
+#     #     token=environ['MOLGENIS_EMX2_TOKEN']
+#     # )
 
-    async with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
-        # client.signin()
-        await client.upload_file(file_path=path_to_molgenis, schema='test')
+#     async with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
+#         # client.signin()
+#         await client.upload_file(file_path=path_to_molgenis, schema='test')
 
-    # emx2.upload_file(file_path=path_to_molgenis, schema='test')
+#     # emx2.upload_file(file_path=path_to_molgenis, schema='test')
 
 
 if __name__ == "__main__":
+    EMX2_HOST = check_url_ending(environ['MOLGENIS_HOST'])
+    host_schema_metadata = get_schema(
+        EMX2_HOST,
+        environ['MOLGENIS_HOST_SCHEMA']
+    )
 
     js_files = get_js_files("./model/expressions/")
 
@@ -89,7 +102,6 @@ if __name__ == "__main__":
 
     schema_metadata_df = pd.DataFrame(schema_metadata)
 
-    path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
-    schema_metadata_df.to_csv(path_to_molgenis, index=False)
-    asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))
-
+    # path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
+    # schema_metadata_df.to_csv(path_to_molgenis, index=False)
+    # asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))

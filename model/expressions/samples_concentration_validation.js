@@ -1,10 +1,10 @@
 /**
- * Validation of user input in the concentration column
+ * @name Samples Concentration validation
+ * @description Validation of user input in the concentration column
  * 
  * @param {number} concentration - a concentration as a decimal
  * @tag Samples.concentration.validation
 */
-
 
 export default function validateConcentration (concentration) {
     if (concentration < 90) {
