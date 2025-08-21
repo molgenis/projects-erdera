@@ -1,4 +1,5 @@
 {
+    "type": "module",
     "name": "projects-erdera",
     "license": "MIT",
     "version": "1.0.0",
@@ -12,9 +13,9 @@
     },
     "scripts": {
         "test": "vitest",
-        "docs:build": "node src/js/jsdoc2md.build.js",
+        "docs:build": "node src/scripts/jsdoc2md.build.js",
         "docs:lint": "yarn markdownlint --fix docs/* --disable MD013",
         "docs": "yarn docs:build && yarn docs:lint",
-        "lint": "prettier src model/expressions --write --config .prettierrc.js"
+        "lint": "prettier src/ --write --config .prettierrc.json"
     }
 }

@@ -2,16 +2,20 @@ import jsdoc2md from "jsdoc-to-markdown";
 import { promises as fs, existsSync, mkdirSync } from "node:fs";
 import path from "path";
 
-const entryDir = "../../model/expressions/*.js";
-const outputDir = "../../docs";
+const entryDir = "./model/expressions/";
+const outputDir = "./docs/expressions/";
 
 try {
-  const outputFilePath = path.resolve(`${outputDir}/expressions.md`);
+  const inputDirPath = path.resolve(`${entryDir}/*.js`)
+  const outputFilePath = path.resolve(`${outputDir}/README.md`);
+  console.log("Reading files from ", inputDirPath);
 
   if (!existsSync(outputDir)) {
+    console.log("Creating output directory")
     mkdirSync(outputDir);
 
     if (!existsSync(outputFilePath)) {
+      console.log("creating output file");
       await fs.writeFile(outputFilePath, "");
     }
   }
@@ -29,7 +33,7 @@ try {
           const isNotAnchorElem = line.search(/^(<a (.*)><\/a>)$/) === -1;
 
           if (line === "## Members") {
-            return "# RD3 expressions documentation";
+            return "# ERDERA-RD3 Expressions";
           } else {
             if (isNotDocTag && isNotAnchorElem) {
               let newLine = line.replace(/<code>/, "`");
@@ -39,10 +43,11 @@ try {
           }
         }
       });
-
       return doc.join("\n");
     })
     .then((result) => {
+      console.log("Writing file", outputFilePath);
+      console.log(result);
       fs.writeFile(outputFilePath, result);
     });
 } catch (err) {

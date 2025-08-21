@@ -16,7 +16,7 @@
  * function validateYearOfBirth (yearOfBirth) {
  *     // ....
  * }
- * validateYearOfBirth(name)
+ * validateYearOfBirth(yearOfBirth)
  * ```
  *
  */
