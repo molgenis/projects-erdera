@@ -19,27 +19,27 @@ try {
   jsdoc2md.render({ files: entryDir })
   .then((output) => {
     const content = output.split("\n");
-    const docs = [];
+    const start = content.findIndex((value) => value === "<dl>");
+    const end = content.findIndex((value) => value === "</dl>");
     
-    for (let i=0; i < content.length; i++) {
-      const line = content[i];
-      const isNotHtml = line.search(/^(<(.*?)>(.|\n)*?<\/(.*?)>)$/) === -1 && line.search(/^(<(.*)>)$/) === -1;
-      const isNotDocTag = line.search(/^\*\*/) === -1;
-      if (line === "## Members") {
-       docs.push("# Expressions documentation\n");
-      // } else {
-      //   docs.push(line)
-      // }
-      } else if (isNotHtml && isNotDocTag && line !== "") {
-        let newLine = line.replace(/<code>/, '`');
-        newLine = newLine.replace(/<\/code>/, '`');
-        docs.push(newLine)
-      } else {
-        docs.push(line)
+    const doc = content.map((line,index) => {
+      if (index < start || index > end) {
+        const isNotDocTag = line.search(/^\*{2}(Kind|Tag)\*{2}/) === -1;
+        const isNotAnchorElem = line.search(/^(<a (.*)><\/a>)$/) === -1;
+        
+        if (line === "## Members") {
+          return "# RD3 expressions documentation"
+        } else {
+          if (isNotDocTag && isNotAnchorElem) {
+            let newLine = line.replace(/<code>/, '`');
+            newLine = newLine.replace(/<\/code>/, '`');
+            return newLine
+          }
+        }
       }
-    } 
-    // console.log(docs);
-    return docs.join("\n")
+    });
+    
+    return doc.join("\n")
   })
   .then((result) => {
     fs.writeFile(outputFilePath, result)
