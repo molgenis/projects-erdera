@@ -16,6 +16,6 @@
         "docs:build": "node src/scripts/jsdoc2md.build.js",
         "docs:lint": "yarn markdownlint --fix docs/*",
         "docs": "yarn docs:build && yarn docs:lint",
-        "lint": "prettier src/ --write --config .prettierrc.json"
+        "lint": "prettier src tests --write --config .prettierrc.json"
     }
 }
