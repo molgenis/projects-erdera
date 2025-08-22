@@ -27,8 +27,6 @@ def extract_js_file_content(js_file: str):
 
     parsed_js = {
         'tableName': '',
-        'tableExtends': '',
-        'tableType': '',
         'columnName': ''
     }
 
@@ -58,6 +56,7 @@ def extract_js_file_content(js_file: str):
             parsed_js[expression_type] = parsed_js[expression_type] + \
                 clean_js_line
 
+    func_call = re.sub(r'\(.*\)', f"({parsed_js['columnName']})", func_call)
     parsed_js[expression_type] = f"{parsed_js[expression_type]};{func_call}"
     return parsed_js
 
@@ -94,14 +93,37 @@ if __name__ == "__main__":
         environ['MOLGENIS_HOST_SCHEMA']
     )
 
-    js_files = get_js_files("./model/expressions/")
+    # parse js files and create molgenis.csv structure
+    js_files = get_js_files("./src/js/")
 
-    schema_metadata = []
+    mg_expressions = []
     for file in js_files:
-        schema_metadata.append(extract_js_file_content(js_file=file))
+        mg_expressions.append(extract_js_file_content(js_file=file))
 
-    schema_metadata_df = pd.DataFrame(schema_metadata)
+    mg_expressions_df = pd.DataFrame(mg_expressions)
 
-    # path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
-    # schema_metadata_df.to_csv(path_to_molgenis, index=False)
-    # asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))
+    # retrieve schema metadata from remote and merge
+    current_mg_schema = get_schema(
+        environ['MOLGENIS_HOST'],
+        environ['MOLGENIS_HOST_SCHEMA']
+    )
+
+    for row in mg_expressions:
+        matching_row = current_mg_schema.loc[(
+            (current_mg_schema['tableName'] == row['tableName']) &
+            (current_mg_schema['columnName'] == row['columnName'])
+        )]
+
+        if len(matching_row.index):
+            for column in ['computed', 'required', 'validation', 'visible']:
+                if column in row:
+                    current_mg_schema.loc[(
+                        (current_mg_schema['tableName'] == row['tableName']) &
+                        (current_mg_schema['columnName'] == row['columnName'])
+                    ),
+                        column
+                    ] = row[column]
+
+                # path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
+                # schema_metadata_df.to_csv(path_to_molgenis, index=False)
+                # asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))
