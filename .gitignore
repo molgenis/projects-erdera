@@ -1,3 +1,7 @@
 .env
 
+# python
+venv
+
+# node
 node_modules
