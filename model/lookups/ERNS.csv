@@ -1,0 +1,24 @@
+name,codesystem,code,ontologyTermURI,type,country,city,latitude,longitude,aliases
+ERN BOND,ROR,04crk2m06,https://ror.org/04crk2m06,healthcare,Italy,Bologna,44.49381,11.33875,European Reference Network on rare bone diseases
+ERN CRANIO,ROR,032gggv33,https://ror.org/032gggv33,healthcare,The Netherlands,Rotterdam,51.9225,4.47917,"European Reference Network for rare and/or complex craniofacial anomalies and ear, nose and throat disorders"
+Endo-ERN,ROR,05s4nk876,https://ror.org/05s4nk876,healthcare,The Netherlands,Leiden,52.15833,4.49306,European Reference Network on Rare Endocrine Conditions
+ERN EpiCARE,ROR,0214h3370,https://ror.org/0214h3370,healthcare,France,Lyon,45.74846,4.84671,European Reference Network for rare and complex epilepsies
+ERKNet,ROR,04x2ddb07,https://ror.org/04x2ddb07,"funder,healthcare",Germany,Heidelberg,49.40768,8.69079,European Reference Network for Rare Kidney Diseases
+ERN-RND,ROR,05a27za87,https://ror.org/05a27za87,healthcare,Germany,Tübingen,48.52266,9.05222,European Reference Network for Rare Neurological Diseases
+ERNICA,ROR,02h9n4675,https://ror.org/02h9n4675,healthcare,The Netherlands,Rotterdam,51.9225,4.47917,European Reference Network for Rare Inherited and Congenital Anomalies
+ERN LUNG,ROR,0279ntc65,https://ror.org/0279ntc65,healthcare,Germany,Frankfurt am Main,50.11552,8.68417,European Reference Network on respiratory diseases
+ERN Skin,ROR,0446wcg70,https://ror.org/0446wcg70,healthcare,France,Paris,48.85341,2.3488,European Reference Network on skin disorders
+ERN EURACAN,ROR,01rq5e797,https://ror.org/01rq5e797,"funder,healthcare",France,Lyon,45.74846,4.84671,European Reference Network on rare adult solid cancers
+ERN EuroBloodNet,ROR,04dng8q18,https://ror.org/04dng8q18,healthcare,France,Paris,48.85341,2.3488,European Reference Network on rare haematological diseases
+ERN eUROGEN,ROR,00y7tet25,https://ror.org/00y7tet25,healthcare,The Netherlands,Nijmegen,51.8425,5.85278,European Reference Network on urogenital diseases and conditions
+ERN EURO-NMD,ROR,04x3ta798,https://ror.org/04x3ta798,healthcare,France,Paris,48.85341,2.3488,European Reference Network on rare neuromuscular diseases
+ERN EYE,ROR,029nm1m14,https://ror.org/029nm1m14,healthcare,France,Strasbourg,48.58392,7.74553,European Reference Network on rare eye diseases
+ERN GENTURIS,ROR,03pbpa834,https://ror.org/03pbpa834,healthcare,The Netherlands,Nijmegen,51.8425,5.85278,European Reference Network on rare genetic tumour risk syndromes
+ERN ITHACA,ROR,03va0yq34,https://ror.org/03va0yq34,healthcare,France,Paris,48.85341,2.3488,"European Reference Network for Intellectual disability, TeleHealth, Autism and Congenital Anomalies"
+MetabERN,ROR,00xdsr520,https://ror.org/00xdsr520,healthcare,Germany,Wiesbaden,50.08258,8.24932,European Reference Network on hereditary metabolic disorders
+ERN PaedCan,ROR,02dk8t214,https://ror.org/02dk8t214,healthcare,Austria,Vienna,48.20849,16.37208,European Reference Network on paediatric cancer
+ERN RARE-LIVER,ROR,036e61f39,https://ror.org/036e61f39,healthcare,Germany,Hamburg,53.55073,9.99302,European Reference Network on rare liver diseases
+ERN ReCONNET,ROR,04069k268,https://ror.org/04069k268,healthcare,Italy,Pisa,43.70853,10.4036,European Reference Network on Rare and Complex Connective Tissue and Musculoskeletal Diseases
+ERN RITA,ROR,0208ges23,https://ror.org/0208ges23,healthcare,The Netherlands,Utrecht,52.09083,5.12222,"European Reference Network on immunodeficiency, autoinflammatory and autoimmune diseases"
+ERN TRANSPLANT-CHILD,ROR,04rr75245,https://ror.org/04rr75245,healthcare,Spain,Madrid,40.4165,-3.70256,European Reference Network on Transplantation in Children
+VASCERN,ROR,005pygq66,https://ror.org/005pygq66,healthcare,France,Paris,48.85341,2.3488,European Reference Network on Rare Multisystemic Vascular Diseases
