@@ -1,12 +1,20 @@
 """Extract expressions from javascript files and insert them into the molgenis.csv"""
 import asyncio
-from os import listdir, environ
+from os import listdir, environ, path
 import re
+import logging
 from io import StringIO
+import requests
+import csv
+from tqdm import tqdm
 from dotenv import load_dotenv
 import pandas as pd
 from molgenis_emx2_pyclient import Client
 load_dotenv()
+
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+log = logging.getLogger("RD3: update schema metadata")
 
 
 def check_url_ending(url: str):
@@ -71,19 +79,10 @@ def get_schema(host: str, schema: str):
         return data
 
 
-# async def upload_schema(path_to_molgenis: str):
-#     """Upload the molgenis scheme with the expressions"""
-#     # emx2 = Client(
-#     #     'https://willemijn.molgenis.net',
-#     #     schema='test',
-#     #     token=environ['MOLGENIS_EMX2_TOKEN']
-#     # )
-
-#     async with Client('https://willemijn.molgenis.net', token=environ['MOLGENIS_EMX2_TOKEN']) as client:
-#         # client.signin()
-#         await client.upload_file(file_path=path_to_molgenis, schema='test')
-
-#     # emx2.upload_file(file_path=path_to_molgenis, schema='test')
+async def upload_schema(path_to_molgenis: str, host: str, schema: str, token: str):
+    """Upload the molgenis scheme with the expressions"""
+    async with Client(url=host, token=token) as client:
+        await client.upload_file(file_path=path_to_molgenis, schema=schema)
 
 
 if __name__ == "__main__":
@@ -96,11 +95,10 @@ if __name__ == "__main__":
     # parse js files and create molgenis.csv structure
     js_files = get_js_files("./src/js/")
 
+    log.info('Extracting content from js files...')
     mg_expressions = []
-    for file in js_files:
+    for file in tqdm(js_files):
         mg_expressions.append(extract_js_file_content(js_file=file))
-
-    mg_expressions_df = pd.DataFrame(mg_expressions)
 
     # retrieve schema metadata from remote and merge
     current_mg_schema = get_schema(
@@ -108,7 +106,8 @@ if __name__ == "__main__":
         environ['MOLGENIS_HOST_SCHEMA']
     )
 
-    for row in mg_expressions:
+    log.info('Adding expressions to schema...')
+    for row in tqdm(mg_expressions):
         matching_row = current_mg_schema.loc[(
             (current_mg_schema['tableName'] == row['tableName']) &
             (current_mg_schema['columnName'] == row['columnName'])
@@ -124,6 +123,29 @@ if __name__ == "__main__":
                         column
                     ] = row[column]
 
-                # path_to_molgenis = '/Users/w.f.oudijk/Library/Mobile Documents/com~apple~CloudDocs/Documents/ERDERA/molgenis.csv'
-                # schema_metadata_df.to_csv(path_to_molgenis, index=False)
-                # asyncio.run(upload_schema(path_to_molgenis=path_to_molgenis))
+        else:
+            matching_row_err = f"Expression is defined, but {current_mg_schema['tableName']}.{current_mg_schema['columnName']} does not exist"
+            log.error(matching_row_err)
+
+    # import
+    updated_mg_schema_df = pd.DataFrame(current_mg_schema)
+    updated_mg_schema_df['key'] = updated_mg_schema_df['key'].astype('Int64')
+    updated_mg_schema_df.to_csv(
+        './tmp/molgenis.csv', index=False, quoting=csv.QUOTE_ALL)
+
+    mg_schema = environ['MOLGENIS_HOST_SCHEMA']
+    try:
+        UPLOAD_SCHEMA_SUCCESS = f"Updated schema metadata in {mg_schema}"
+        log.error(UPLOAD_SCHEMA_SUCCESS)
+        asyncio.run(
+            upload_schema(
+                path_to_molgenis=path.abspath('./model/molgenis.csv'),
+                host=environ['MOLGENIS_HOST'],
+                schema=mg_schema,
+                token=environ['MOLGENIS_HOST_TOKEN']
+            )
+        )
+    except requests.exceptions.HTTPError as err:
+        mg_schema = environ['MOLGENIS_HOST_SCHEMA']
+        UPLOAD_SCHEMA_ERROR = f"Failed to import schema metadata into {mg_schema}"
+        log.error(UPLOAD_SCHEMA_ERROR)
