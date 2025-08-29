@@ -4,8 +4,9 @@ from os import listdir, environ, path
 import re
 import logging
 from io import StringIO
-import requests
 import csv
+import sys
+import requests
 from tqdm import tqdm
 from dotenv import load_dotenv
 import pandas as pd
@@ -14,7 +15,8 @@ load_dotenv()
 
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-log = logging.getLogger("RD3: update schema metadata")
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+log = logging.getLogger("RD3:")
 
 
 def check_url_ending(url: str):
@@ -139,7 +141,7 @@ if __name__ == "__main__":
         log.error(UPLOAD_SCHEMA_SUCCESS)
         asyncio.run(
             upload_schema(
-                path_to_molgenis=path.abspath('./model/molgenis.csv'),
+                path_to_molgenis=path.abspath('./tmp/molgenis.csv'),
                 host=environ['MOLGENIS_HOST'],
                 schema=mg_schema,
                 token=environ['MOLGENIS_HOST_TOKEN']
