@@ -17,18 +17,10 @@
  *
  * @example
  *
- * To use this expression in your schema, copy the contents of the
- * js file into your molgenis schema. Call the function and enter
- * the name of the column that corresponds to "year of birth".
- *
  * ```js
- * // contents of this script
- * function validateYearOfBirth (yearh) {
- *     // ....
- * }
- *
- * // name of the column containing the value to validate
- * validateYearOfBirth(yearOfBirth)
+ * validateYearOfBirth(1200) // returns error
+ * validateYearOfBirth(2100) // returns error
+ * validateYearOfBirth(2020) // returns true
  * ```
  *
  * @tag Individuals.year_of_birth.validation

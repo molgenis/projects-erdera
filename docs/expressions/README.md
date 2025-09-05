@@ -18,18 +18,11 @@ imported in a file or when it is entered into the web form.
 | yearOfBirth | `number` | a year as four digits (YYYY) |
 
 **Example**  
-To use this expression in your schema, copy the contents of the
-js file into your molgenis schema. Call the function and enter
-the name of the column that corresponds to "year of birth".
 
 ```js
-// contents of this script
-function validateYearOfBirth (yearh) {
-    // ....
-}
-
-// name of the column containing the value to validate
-validateYearOfBirth(yearOfBirth)
+validateYearOfBirth(1200) // returns error 
+validateYearOfBirth(2100) // returns error
+validateYearOfBirth(2020) // returns true
 ```
 
 ## Samples: Concentration validation
@@ -49,12 +42,7 @@ or entry into the webform.
 **Example**  
 
 ```js
-// in your schema
-
-function validateConcentration(value) {
-   // ...
-}
-
-// name of the column containing the value to validate
-validateConcentration(concentration)
+validateConcentration(0) // returns error
+validateConcentration(200) // returns error
+validateConcentration(100) // returns true
 ```

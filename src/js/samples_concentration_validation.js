@@ -15,14 +15,9 @@
  * @example
  *
  * ```js
- * // in your schema
- *
- * function validateConcentration(value) {
- *    // ...
- * }
- *
- * // name of the column containing the value to validate
- * validateConcentration(concentration)
+ * validateConcentration(0) // returns error
+ * validateConcentration(200) // returns error
+ * validateConcentration(100) // returns true
  * ```
  *
  * @tag Samples.concentration.validation
