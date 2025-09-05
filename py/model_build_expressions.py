@@ -66,7 +66,10 @@ def extract_js_file_content(js_file: str):
             parsed_js[expression_type] = parsed_js[expression_type] + \
                 clean_js_line
 
-    func_call = re.sub(r'\(.*\)', f"({parsed_js['columnName']})", func_call)
+    func_call = re.sub(
+        r'\(.*\)', f"({parsed_js['columnName'].title().replace(' ', '')})",
+        func_call
+    )
     parsed_js[expression_type] = f"{parsed_js[expression_type]};{func_call}"
     return parsed_js
 
@@ -74,7 +77,7 @@ def extract_js_file_content(js_file: str):
 def get_schema(host: str, schema: str):
     """Retrieve the latest molgenis, in which the expressions need to be added"""
     with Client(host, token=environ['MOLGENIS_HOST_TOKEN']) as client:
-        url = f"{host}{schema}/api/csv"
+        url = f"{check_url_ending(host)}{schema}/api/csv"
         response = client.session.get(url)
         schema_csv_string = StringIO(response.text)
         data = pd.read_csv(schema_csv_string, sep=",")
@@ -88,25 +91,18 @@ async def upload_schema(path_to_molgenis: str, host: str, schema: str, token: st
 
 
 if __name__ == "__main__":
-    EMX2_HOST = check_url_ending(environ['MOLGENIS_HOST'])
-    host_schema_metadata = get_schema(
-        EMX2_HOST,
-        environ['MOLGENIS_HOST_SCHEMA']
-    )
+    mg_host = environ['MOLGENIS_HOST']
+    mg_schema = environ['MOLGENIS_HOST_SCHEMA']
 
     # parse js files and create molgenis.csv structure
-    js_files = get_js_files("./src/js/")
-
     log.info('Extracting content from js files...')
+    js_files = get_js_files("./src/js/")
     mg_expressions = []
     for file in tqdm(js_files):
         mg_expressions.append(extract_js_file_content(js_file=file))
 
     # retrieve schema metadata from remote and merge
-    current_mg_schema = get_schema(
-        environ['MOLGENIS_HOST'],
-        environ['MOLGENIS_HOST_SCHEMA']
-    )
+    current_mg_schema = get_schema(mg_host, mg_schema)
 
     log.info('Adding expressions to schema...')
     for row in tqdm(mg_expressions):
@@ -126,8 +122,9 @@ if __name__ == "__main__":
                     ] = row[column]
 
         else:
-            matching_row_err = f"Expression is defined, but {current_mg_schema['tableName']}.{current_mg_schema['columnName']} does not exist"
-            log.error(matching_row_err)
+            schema_target = f"{current_mg_schema['tableName']}.{current_mg_schema['columnName']}"
+            MATCHING_ROW_ERR = f"Expression for {schema_target} does not exist"
+            log.error(MATCHING_ROW_ERR)
 
     # import
     updated_mg_schema_df = pd.DataFrame(current_mg_schema)
@@ -135,19 +132,17 @@ if __name__ == "__main__":
     updated_mg_schema_df.to_csv(
         './tmp/molgenis.csv', index=False, quoting=csv.QUOTE_ALL)
 
-    mg_schema = environ['MOLGENIS_HOST_SCHEMA']
     try:
         UPLOAD_SCHEMA_SUCCESS = f"Updated schema metadata in {mg_schema}"
         log.error(UPLOAD_SCHEMA_SUCCESS)
         asyncio.run(
             upload_schema(
                 path_to_molgenis=path.abspath('./tmp/molgenis.csv'),
-                host=environ['MOLGENIS_HOST'],
+                host=mg_host,
                 schema=mg_schema,
                 token=environ['MOLGENIS_HOST_TOKEN']
             )
         )
     except requests.exceptions.HTTPError as err:
-        mg_schema = environ['MOLGENIS_HOST_SCHEMA']
         UPLOAD_SCHEMA_ERROR = f"Failed to import schema metadata into {mg_schema}"
         log.error(UPLOAD_SCHEMA_ERROR)
