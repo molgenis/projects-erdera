@@ -1,0 +1,21 @@
+{
+    "type": "module",
+    "name": "projects-erdera",
+    "license": "MIT",
+    "version": "1.0.0",
+    "devDependencies": {
+        "jsdoc": "^4.0.4",
+        "jsdoc-to-markdown": "^9.1.2",
+        "markdownlint": "^0.38.0",
+        "markdownlint-cli": "^0.45.0",
+        "prettier": "^3.6.2",
+        "vitest": "^3.2.4"
+    },
+    "scripts": {
+        "test": "vitest",
+        "docs:build": "node src/scripts/jsdoc2md.build.js",
+        "docs:lint": "yarn markdownlint --fix docs/*",
+        "docs": "yarn docs:build && yarn docs:lint",
+        "lint": "prettier src tests --write --config .prettierrc.json"
+    }
+}
