@@ -16,3 +16,13 @@ yarn test
 # build and lint docs
 yarn docs
 ```
+
+### ERDERA-RD3 Management
+
+Scripts for managing the ERDERA-RD3 instances are stored in the `./erdera/`. Many of these scripts require credentials to retrieve or import data. Create a `.env` file in the project root and create the following variables.
+
+```sh
+MOLGENIS_HOST=...
+MOLGENIS_HOST_TOKEN=...
+MOLGENIS_HOST_SCHEMA=...
+```
