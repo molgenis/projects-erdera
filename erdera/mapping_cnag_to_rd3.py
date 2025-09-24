@@ -22,10 +22,11 @@ def get_staging_area_participants():
         )
 
 
-def build_import_pedigree_table(client, data):
+def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
-    pedigree = pd.DataFrame(data['famid'].unique()) \
-        .rename(columns={0: 'id'}) \
+    pedigree = data[['famid']] \
+        .drop_duplicates() \
+        .rename(columns={'famid': 'id'}) \
         .sort_values(by="id")
     client.save_schema(table='Pedigree', data=pedigree)
 
