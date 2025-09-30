@@ -30,6 +30,29 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         .sort_values(by="id")
     client.save_schema(table='Pedigree', data=pedigree)
 
+def build_import_individuals_table(client, data: pd.DataFrame):
+    """Map staging area data into the Individuals table"""
+    individuals = data[['id', 'sex', 'lifeStatus', 'report_date', 'last_modification_date', 'report_id']]
+    individuals = individuals.rename(columns={
+        'id': 'alternate ids', 
+        'sex': 'gender at birth',
+        'lifeStatus': 'individual status', 
+        'report_date': 'date created at source', 
+        'last_modification_date': 'date updated at source', 
+        'report_id': 'id'
+    })
+    
+    # map sex
+    gender_dict = {
+        'M': 'assigned male at birth', 
+        'F': 'assigned female at birth'
+    }
+
+    individuals['gender at birth'] = individuals['gender at birth'].map(gender_dict)
+
+    client.save_schema(table='Individuals', data=individuals)
+
+
 
 if __name__ == "__main__":
 
@@ -45,7 +68,8 @@ if __name__ == "__main__":
     build_import_pedigree_table(db, participants)
 
     # 2. Individuals table mapping
-
+    build_import_individuals_table(db, participants)
+    
     # 3. Pegidgree Members mapping
 
     # 4. Clinical Observations mapping
