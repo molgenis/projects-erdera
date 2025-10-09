@@ -5,13 +5,11 @@ from os import environ
 import pandas as pd
 from molgenis_emx2_pyclient.client import Client
 from dotenv import load_dotenv
-import math
 import ast
 load_dotenv()
 
 logging.captureWarnings(True)
 log = logging.getLogger("Staging Area Mapping")
-
 
 def get_staging_area_participants():
     """Retrieve metadata from /<staging area>/Participants"""
@@ -22,7 +20,6 @@ def get_staging_area_participants():
             schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
             as_df=True
         )
-
 
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
@@ -72,7 +69,7 @@ def build_import_individuals_table(client, data: pd.DataFrame):
 
 def build_import_pedigree_members(client, data: pd.DataFrame):
     """ SKIPPED FOR NOW - needs discussion 
-    
+    TODO: discuss with Leslie and Steve
     Map staging area data into the Pedigree members table
     If index = Yes, then relative is itself (i.e., the patient). 
     If index = No, then relative is the individual of the same family with index set to yes.
@@ -146,12 +143,20 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
     client.save_schema(table='Clinical observations', data = clinical_observations)
 
 def build_import_consent(client, data: pd.DataFrame):
-    """Map staging area data to the Individual consent data
-    TODO: field mme will need to be added (we currently do not have a field for this in RD3)"""
-    indv_consent = data[['report_id']] \
+    """Map staging area data to the Individual consent data"""
+    indv_consent = data[['report_id', 'mme']] \
     .rename(columns={
-        'report_id': 'individuals'
+        'report_id': 'individuals',
+        'mme': 'allow recontacting'
     })
+
+    consent_dict = {
+        'Yes': 'Allow use in MatchMaker',
+        'No': 'No use in MatchMaker'
+    }
+
+    indv_consent['allow recontacting'] = indv_consent['allow recontacting'].map(consent_dict)
+
     client.save_schema(table = 'Individual consent', data = indv_consent)
 
 def build_import_disease_history(client, data:pd.DataFrame):
@@ -171,21 +176,33 @@ def build_import_disease_history(client, data:pd.DataFrame):
     # capture individual's auto id 
     disease_history['part of clinical observation'] = None
     for index, disease_elem in disease_history.iterrows():
+        # get the auto id generated for this individual
         id = clinical_obs.loc[clinical_obs['individuals'] == disease_elem['report_id'], 'id'].squeeze()
-        disease_history.loc[index, 'part of clinical observation'] = id
-        # get disease
-        # diseases = []
+        disease_history.loc[index, 'part of clinical observation'] = id # set auto id
+        # get all diseases from this individual
         diseases_all = disease_elem.get('disease')
+        # there are cases when the diseases is a string of an empty list: '[]'
         if isinstance(diseases_all, str):
-            # print(f'first: {diseases_all}')
-            diseases_all = ast.literal_eval(diseases_all)
-        if isinstance(diseases_all, (list)):
-            if len(diseases_all) != 0:
+            diseases_all = ast.literal_eval(diseases_all) # convert to list
+        if isinstance(diseases_all, (list)): # check if the input is of type list 
+            if len(diseases_all) != 0: # check if the list is not empty
+                # collect all diseases from this individual
                 diseases = [disease.get('ordo').get('name') for disease in diseases_all if disease.get('ordo').get('name') is not None]
-                # diseases.append(disease.get('name'))
-                disease_history.loc[index, 'disease'] = ','.join(diseases)
+                disease_history.loc[index, 'disease'] = ','.join(map(str,diseases))
+    
+    # data is expanded to ensure that each disease is on its own row
+    disease_history.loc[:,'disease'] = disease_history['disease'].str.split(',')
+    disease_history = disease_history.explode('disease')
+
+    # map the diseases to the EMX2 term
+    disease_dict = {
+        'Ullrich congenital muscular dystrophy': 'Congenital muscular dystrophy, Ullrich type'
+    }
+    disease_history['disease'] = disease_history['disease'].replace(disease_dict)
 
     # map age group at onset
+    # TODO: save the records that do not have a ontology term match. --> in the staging area tables save this information
+    # any record that does not map should be flagged --> go through it once a month or something 
     onset_dict = {
         'HP:0011463':'Childhood onset',
         'HP:0003577': 'Congenital onset',
@@ -202,14 +219,14 @@ def build_import_disease_history(client, data:pd.DataFrame):
 
     # map age group 
     disease_history['age of onset'] = "P" + disease_history['age of onset'] + "Y0M0"
-    # TODO: this fails --> probably bug 
+    # TODO: this fails --> probably bug --> is a bug, issue is created
     disease_history = disease_history.drop(columns={'age of onset'})
 
     disease_history_filtered = disease_history[disease_history['disease'].notna() & 
                                                (disease_history['disease'] != '[]') &
                                                (disease_history['disease'] != '')]
 
-    # TODO: this fails because disease is an ontology and not an array in RD3
+    # upload the data
     client.save_schema(table = 'Disease history', data=disease_history_filtered) 
 
 def build_import_phenotype_observations(client, data:pd.DataFrame):
@@ -225,29 +242,54 @@ def build_import_phenotype_observations(client, data:pd.DataFrame):
                               as_df = True)
     
     # capture individual's auto id 
-    phen_observations['part of clinical observation'] = None
+    pheno_observations2 = []
     for index, pheno_obs in phen_observations.iterrows():
+        # get the automatically generated id for this individual
         id = clinical_obs.loc[clinical_obs['individuals'] == pheno_obs['report_id'], 'id'].squeeze()
-        phen_observations.loc[index, 'part of clinical observation'] = id
         
-        # get disease
-        # diseases = []
+        # get all observations of this individual
         observations_all = pheno_obs.get('type')
-        print(observations_all)
         if isinstance(observations_all, str):
             observations_all = ast.literal_eval(observations_all)
         if isinstance(observations_all, (list)):
             if len(observations_all) != 0:
                 observations = [observation.get('name') for observation in observations_all if observation.get('name') is not None]
-                # diseases.append(disease.get('name'))
-                phen_observations.loc[index, 'type'] = ','.join(observations)
+                for observation in observations:
+                    new_entry = {}
+                    new_entry['part of clinical observation'] = id
+                    new_entry['type'] = observation
+                    if id == 'JzKaxfH6si':
+                        print(new_entry)
+                    pheno_observations2.append(new_entry)
 
-    phen_observations_filtered = phen_observations[phen_observations['type'].notna() & 
-                                               (phen_observations['type'] != '[]') &
-                                               (phen_observations['type'] != '')]
+    phen_observations = pd.DataFrame(pheno_observations2)
+    
+    phen_dict = {
+        'Atypical behavior': 'Behavioral abnormality',
+        'Abnormal external genitalia morphology': 'Abnormal external genitalia',
+        'High -  narrow palate': 'High, narrow palate',
+        'Elevated serum creatine phosphokinase': 'Elevated serum creatine kinase',
+        'Seizures': 'Seizure',
+        'Abnormality of the cerebrum': 'Abnormal cerebral morphology',
+        'Recurrent coughing spasms': 'Mild', # TODO: we miss this in the ontology (HP:0033362)
+        'Dysautonomia': 'obsolete Dysautonomia',
+        'Obstipation': 'Mild', # TODO: misses
+        'Hypotonia': 'Muscular hypotonia',
+        'Ankle contracture': 'Ankle flexion contracture',
+        'Primary microcephaly': 'Congenital microcephaly',
+        'Reduced collaborative play': 'Mild', # TODO: misses
+        'Decreased response to growth hormone stimulation test': 'Growth hormone deficiency',
+        'Abnormality of muscle morphology': 'Abnormal skeletal muscle morphology',
+        'Depression': 'Depressivity',
+        'Abnormal diminished volition': 'Diminished motivation',
+        'Abnormality of mental function': 'Abnormality of higher mental function',
+        'Abnormal pyramidal signs': 'Abnormal pyramidal sign',
+        'Nasal congestion': 'Nasal obstruction',
+    }
+    phen_observations['type'] = phen_observations['type'].replace(phen_dict)
 
-    # TODO: this fails because type is an ontology and not an ontology_array in RD3
-    client.save_schema(table = 'Phenotype observations', data=phen_observations_filtered)
+    # upload
+    client.save_schema(table = 'Phenotype observations', data=phen_observations.drop_duplicates())
 
 
 if __name__ == "__main__":
@@ -278,7 +320,7 @@ if __name__ == "__main__":
     build_import_consent(db, participants)
 
     # 6. Disease History mapping
-    # build_import_disease_history(db, participants)
+    build_import_disease_history(db, participants)
 
     # 7. Phenotype Observations mapping
     build_import_phenotype_observations(db, participants)
