@@ -7,6 +7,7 @@ from molgenis_emx2_pyclient.client import Client
 from dotenv import load_dotenv
 import ast
 load_dotenv()
+from datetime import datetime
 
 logging.captureWarnings(True)
 log = logging.getLogger("Staging Area Mapping")
@@ -21,6 +22,23 @@ def get_staging_area_participants():
             as_df=True
         )
 
+def get_new_participants(data: pd.DataFrame):
+    """Get the new participants based on the last_modification_date
+    TEST
+    """
+    previous_date = '2024-12-18T14:42:04.125522' # to test
+    previous_date = datetime.fromisoformat(previous_date)
+
+    # convert the last_modification_date into datetime format
+    data['last_modification_date'] = data['last_modification_date'].astype('str')    
+    data['last_modification_date'] = data['last_modification_date'].apply(lambda x:
+        datetime.fromisoformat(x)
+    )
+
+    # get only the new data
+    data = data[data['last_modification_date'] > previous_date]
+    return data
+
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
     pedigree = data[['famid']] \
@@ -28,10 +46,18 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         .drop_duplicates() \
         .sort_values(by="id")
     
-    # get the pedigree information with family_id (a.k.a alternate ids)
-    pedigree_alternates = data[['famid', 'family_id']]
-    # initialise the alternate ids column 
-    pedigree['alternate ids'] = ""
+    # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
+    pedigree_alternates = data[['famid', 'family_id', 'otheraffected']]
+
+    others_affected_dict = {
+        'Yes': True,
+        'No': False
+    }
+
+    pedigree['others affected'] = pedigree_alternates['otheraffected'].map(others_affected_dict)
+
+    # initialise the alternate ids column
+    pedigree['alternate ids'] = None
     for index, family in pedigree.iterrows():
         # retrieve the family IDs for this family 
         alternate_ids = pedigree_alternates.loc[pedigree_alternates['famid'] == family['id'], 'family_id'].to_list()
@@ -47,15 +73,21 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
-    individuals = data[['id', 'sex', 'lifeStatus', 'report_date', 'last_modification_date', 'report_id']] \
+    individuals = data[['id', 'sex', 'lifeStatus', 'report_date', 'last_modification_date', 'report_id', 'baselineage']] \
     .rename(columns={
         'id': 'alternate ids', 
         'sex': 'gender at birth',
         'lifeStatus': 'individual status', 
         'report_date': 'date created at source', 
         'last_modification_date': 'date updated at source', 
-        'report_id': 'id'
+        'report_id': 'id',
+        'baselineage': 'age at enrolment'
     })
+
+    individual_status_dict = {
+        'Deceased': 'Dead'
+    }
+    individuals['individual status'] = individuals['individual status'].replace(individual_status_dict)
     
     # map sex
     gender_dict = {
@@ -64,16 +96,20 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     }
     individuals['gender at birth'] = individuals['gender at birth'].map(gender_dict)
 
+    # map age group 
+    individuals['age at enrolment'] = pd.to_numeric(individuals['age at enrolment'], errors='coerce')
+    individuals['age at enrolment'] = "P" + individuals['age at enrolment'].astype('Int64').astype('string') + "Y" 
+
     # upload individuals data to RD3
     client.save_schema(table='Individuals', data=individuals)
 
 def build_import_pedigree_members(client, data: pd.DataFrame):
     """ SKIPPED FOR NOW - needs discussion 
-    TODO: discuss with Leslie and Steve
+    TODO: there are some issues with the API, this function will need to be checked once the issues are fixed
     Map staging area data into the Pedigree members table
     If index = Yes, then relative is itself (i.e., the patient). 
     If index = No, then relative is the individual of the same family with index set to yes.
-    If index = No and there is not relative in the same family with index set to yes --> ?? Does this happen? 
+    If index = No and there is not relative in the same family with index set to yes --> This should not happen and should be reported
     """
     pedigree_members = data[['report_id', 'famid', 'index', 'affectedStatus']] \
     .rename(columns={
@@ -100,11 +136,10 @@ def build_import_pedigree_members(client, data: pd.DataFrame):
                                  (pedigree_members['index'] == 'Yes'), 'individual'].squeeze()
             if len(relative) != 0: 
                 pedigree_members.loc[index, 'relative'] = relative
-            else: # this needs to be discussed - we don't know for sure whether this is a patient or a family member 
+            else: # this should not be the case and should be flagged as an error
                 print(f'no diseases relative for individual: {member.get('individual')} from family: {famid}')
                 unclear_members.append({'individual': member.get('individual'),
                                         'family ID': famid})
-                pedigree_members.loc[index, 'relative'] = member.get('individual')
     
     # remove the index column 
     pedigree_members = pedigree_members.drop(columns={'index'})
@@ -126,7 +161,7 @@ def build_import_pedigree_members(client, data: pd.DataFrame):
 
 def build_import_clinical_observations(client, data: pd.DataFrame):
     """Map staging area data into the clinical observations table"""
-    clinical_observations = data[['report_id', 'solved']] \
+    clinical_observations = data[['report_id', 'solved', 'consanguinity']] \
     .rename(columns={
         'report_id': 'individuals',
         'solved': 'is solved'
@@ -139,6 +174,13 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
     }
     clinical_observations['is solved'] = clinical_observations['is solved'].map(solved_dict)
 
+    # map consanguinity
+    consanguinity_dict = {
+        'Yes': True,
+        'No': False
+    }
+    clinical_observations['consanguinity'] = clinical_observations['consanguinity'].map(consanguinity_dict)
+
     # upload
     client.save_schema(table='Clinical observations', data = clinical_observations)
 
@@ -150,22 +192,22 @@ def build_import_consent(client, data: pd.DataFrame):
         'mme': 'allow recontacting'
     })
 
+    # map matchmaker consent
     consent_dict = {
         'Yes': 'Allow use in MatchMaker',
         'No': 'No use in MatchMaker'
     }
-
     indv_consent['allow recontacting'] = indv_consent['allow recontacting'].map(consent_dict)
 
+    # upload the data
     client.save_schema(table = 'Individual consent', data = indv_consent)
 
 def build_import_disease_history(client, data:pd.DataFrame):
     """Map staging area data to disease history data"""
-    disease_history = data[['onset', 'diagnosis', 'baselineage', 'report_id']] \
+    disease_history = data[['onset', 'diagnosis', 'report_id']] \
     .rename(columns={
         'onset': 'age group at onset',
-        'diagnosis': 'disease',
-        'baselineage': 'age of onset'
+        'diagnosis': 'disease'
     })
 
     # the auto IDs are necessary from clinical observations
@@ -174,11 +216,15 @@ def build_import_disease_history(client, data:pd.DataFrame):
                               as_df = True)
     
     # capture individual's auto id 
-    disease_history['part of clinical observation'] = None
-    for index, disease_elem in disease_history.iterrows():
+    disease_history2 = []
+    for _, disease_elem in disease_history.iterrows():
+        # get the P-ID 
+        report_id = disease_elem['report_id']
         # get the auto id generated for this individual
-        id = clinical_obs.loc[clinical_obs['individuals'] == disease_elem['report_id'], 'id'].squeeze()
-        disease_history.loc[index, 'part of clinical observation'] = id # set auto id
+        id = clinical_obs.loc[clinical_obs['individuals'] == report_id, 'id'].squeeze()
+        # get the age group information
+        age_group = disease_history.loc[disease_history['report_id'] == report_id, 'age group at onset']
+        clinical_obs.loc[clinical_obs['individuals'] == report_id, "age group at onset"] = age_group
         # get all diseases from this individual
         diseases_all = disease_elem.get('disease')
         # there are cases when the diseases is a string of an empty list: '[]'
@@ -186,19 +232,37 @@ def build_import_disease_history(client, data:pd.DataFrame):
             diseases_all = ast.literal_eval(diseases_all) # convert to list
         if isinstance(diseases_all, (list)): # check if the input is of type list 
             if len(diseases_all) != 0: # check if the list is not empty
-                # collect all diseases from this individual
-                diseases = [disease.get('ordo').get('name') for disease in diseases_all if disease.get('ordo').get('name') is not None]
-                disease_history.loc[index, 'disease'] = ','.join(map(str,diseases))
-    
-    # data is expanded to ensure that each disease is on its own row
-    disease_history.loc[:,'disease'] = disease_history['disease'].str.split(',')
-    disease_history = disease_history.explode('disease')
+                # add a new entry for each disease in the list
+                for disease in diseases_all:
+                    disease_ordo = disease.get('ordo')
+                    if disease_ordo is not None and len(disease_ordo) != 0:
+                        if disease_ordo.get('name') is None:
+                            print(report_id)
+                        new_entry = {}
+                        new_entry['part of clinical observation'] = id
+                        new_entry['disease'] = disease.get('ordo').get('name')
+                        new_entry['disease status'] = disease.get('status') # e.g., confirmed, suspected
+                        disease_history2.append(new_entry)
+   
+    # convert list to a dataframe
+    disease_history = pd.DataFrame(disease_history2)
 
     # map the diseases to the EMX2 term
     disease_dict = {
-        'Ullrich congenital muscular dystrophy': 'Congenital muscular dystrophy, Ullrich type'
+        'Ullrich congenital muscular dystrophy': 'Congenital muscular dystrophy, Ullrich type',
+        'Calpain-3-related limb-girdle muscular dystrophy R1': 'Calpain-3-related  limb-girdle muscular dystrophy R1'
     }
+    unmatched = ['valosin containing protein']
     disease_history['disease'] = disease_history['disease'].replace(disease_dict)
+
+    tmp = disease_history.loc[disease_history['disease'].isin(unmatched)].index # get the indices of the rows to remove (no match)
+    disease_history = disease_history.drop(tmp, axis=0) # remove rows without a RD3 disease equivalent
+
+    # map the disease status
+    status_dict = {
+        'Confirmed': 'Confirmed diagnosis'
+    }
+    disease_history['disease status'] = disease_history['disease status'].replace(status_dict)
 
     # map age group at onset
     # TODO: save the records that do not have a ontology term match. --> in the staging area tables save this information
@@ -215,19 +279,44 @@ def build_import_disease_history(client, data:pd.DataFrame):
         'HP:0003596': 'Middle age onset',
         'Unknown': '' # needs to be added to the ontology, TODO 
     }
-    disease_history['age group at onset'] = disease_history['age group at onset'].map(onset_dict)
-
-    # map age group 
-    disease_history['age of onset'] = "P" + disease_history['age of onset'] + "Y0M0"
-    # TODO: this fails --> probably bug --> is a bug, issue is created
-    disease_history = disease_history.drop(columns={'age of onset'})
-
-    disease_history_filtered = disease_history[disease_history['disease'].notna() & 
-                                               (disease_history['disease'] != '[]') &
-                                               (disease_history['disease'] != '')]
+    clinical_obs['age group at onset'] = clinical_obs['age group at onset'].map(onset_dict)
 
     # upload the data
-    client.save_schema(table = 'Disease history', data=disease_history_filtered) 
+    client.save_schema(table = 'Disease history', data=disease_history)
+    client.save_schema(table = 'Clinical observations', data=clinical_obs)
+
+def match_phenotypes(obs: dict):
+    """Match phenotypes from GPAP with phenotypes in RD3
+    If the name is not a perfect match, see if the HP code is present in the RD3 ontology, 
+    if not, save the ones that do not have a match. """
+    molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema='CatalogueOntologies',
+        token=environ['MOLGENIS_TOKEN']
+    )
+    # get phenotypes ontology
+    phenotypes = molgenis.get(table='Phenotypes', schema='CatalogueOntologies', as_df=True)
+    # create dictionary of RD3 code and ontology name 
+    code_to_name = dict(zip(phenotypes['code'], phenotypes['name']))
+
+    # save the matches (the once without a perfect name match) 
+    match_dict = {}
+    # and save the ones that do not have a name and/or HP code match 
+    unmatched = []
+    for pheno, code in obs.items():
+        # Case 1: name match → ignore (we only want mismatched names)
+        if pheno in phenotypes['name'].values:
+            continue
+
+        # Case 2: code match → save to match_dict
+        elif code in code_to_name:
+            match_dict[pheno] = code_to_name[code]
+
+        # Case 3: no match at all
+        else:
+            unmatched.append(f'{pheno} ({obs[pheno]})')
+    return match_dict, unmatched
+
 
 def build_import_phenotype_observations(client, data:pd.DataFrame):
     """Map staging area data to phenotype observations data"""
@@ -243,6 +332,7 @@ def build_import_phenotype_observations(client, data:pd.DataFrame):
     
     # capture individual's auto id 
     pheno_observations2 = []
+    obs_dict = {}
     for index, pheno_obs in phen_observations.iterrows():
         # get the automatically generated id for this individual
         id = clinical_obs.loc[clinical_obs['individuals'] == pheno_obs['report_id'], 'id'].squeeze()
@@ -253,40 +343,29 @@ def build_import_phenotype_observations(client, data:pd.DataFrame):
             observations_all = ast.literal_eval(observations_all)
         if isinstance(observations_all, (list)):
             if len(observations_all) != 0:
-                observations = [observation.get('name') for observation in observations_all if observation.get('name') is not None]
-                for observation in observations:
-                    new_entry = {}
-                    new_entry['part of clinical observation'] = id
-                    new_entry['type'] = observation
-                    if id == 'JzKaxfH6si':
-                        print(new_entry)
-                    pheno_observations2.append(new_entry)
+                for observation in observations_all:
+                    if observation.get('name') is not None:
+                        new_entry = {}
+                        new_entry['part of clinical observation'] = id
+                        new_entry['type'] = observation.get('name')
+                        # observed (GPAP) and excluded (RD3) have opposite meanings, so negate boolean
+                        new_entry['excluded'] = not observation.get('observed')
+                        pheno_observations2.append(new_entry)
+                        # save the phenotype names with code as prevalent in GPAP
+                        obs_dict[observation.get('name')] = observation.get('id').split(':')[1] # only get code (without HP:)
 
+    # convert phenotypic observations list to df 
     phen_observations = pd.DataFrame(pheno_observations2)
     
-    phen_dict = {
-        'Atypical behavior': 'Behavioral abnormality',
-        'Abnormal external genitalia morphology': 'Abnormal external genitalia',
-        'High -  narrow palate': 'High, narrow palate',
-        'Elevated serum creatine phosphokinase': 'Elevated serum creatine kinase',
-        'Seizures': 'Seizure',
-        'Abnormality of the cerebrum': 'Abnormal cerebral morphology',
-        'Recurrent coughing spasms': 'Mild', # TODO: we miss this in the ontology (HP:0033362)
-        'Dysautonomia': 'obsolete Dysautonomia',
-        'Obstipation': 'Mild', # TODO: misses
-        'Hypotonia': 'Muscular hypotonia',
-        'Ankle contracture': 'Ankle flexion contracture',
-        'Primary microcephaly': 'Congenital microcephaly',
-        'Reduced collaborative play': 'Mild', # TODO: misses
-        'Decreased response to growth hormone stimulation test': 'Growth hormone deficiency',
-        'Abnormality of muscle morphology': 'Abnormal skeletal muscle morphology',
-        'Depression': 'Depressivity',
-        'Abnormal diminished volition': 'Diminished motivation',
-        'Abnormality of mental function': 'Abnormality of higher mental function',
-        'Abnormal pyramidal signs': 'Abnormal pyramidal sign',
-        'Nasal congestion': 'Nasal obstruction',
-    }
+    # map the phenotypic features from GPAP format to RD3
+    phen_dict = match_phenotypes(obs_dict)[0]
     phen_observations['type'] = phen_observations['type'].replace(phen_dict)
+
+    # get the unmatched phenotypes (the phenotypes from GPAP not present in RD3)
+    unmatched = match_phenotypes(obs_dict)[1]
+    unmatched_names = [entry.split(" (")[0] for entry in unmatched] # only get the name without the HP code
+    tmp = phen_observations.loc[phen_observations['type'].isin(unmatched_names)].index # get the indices of the rows to remove (no match)
+    phen_observations = phen_observations.drop(tmp, axis=0) # remove rows without a RD3 phenotype equivalent
 
     # upload
     client.save_schema(table = 'Phenotype observations', data=phen_observations.drop_duplicates())
