@@ -17,7 +17,7 @@ Jobs Gpap Api,,number of new experiments,int,,,,,,,,,,New experiments since the 
 Jobs Gpap Api,,number of updated experiments,int,,,,,,,,,,Updated experiments since the last run,
 Job errors,,id,auto_id,1,,,,,,,,,,
 Job errors,,job,ref,,TRUE,,Jobs,,,,,,,
-Job errors,,type,string,,,,,,,,,,,
+Job errors,,type,ontology,,,,Error type,,,,,,,
 Job errors,,message,string,,,,,,,,,,,
 Jobs Rd3 mapping,Jobs,,,,,,,,,,,,,
 Jobs Rd3 mapping,,total number of participants,int,,,,,,,,0,,,
