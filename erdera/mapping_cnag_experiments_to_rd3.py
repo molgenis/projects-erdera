@@ -22,6 +22,17 @@ def get_staging_area_experiments():
             schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
             as_df=True
         )
+    
+def map_individuals(data:pd.DataFrame, client: Client):
+    """Map the individuals based on the experiments -- temporary until the GPAP API is fixed"""
+    # get current list of individuals 
+    individuals = client.get(table='Individuals', as_df=True)
+    ids = individuals['id']
+
+    # gather the individuals that are not already in the individuals RD3 table
+    new_individuals = data.loc[~data['Participant_ID'].isin(ids), 'Participant_ID'].rename('id')
+
+    client.save_schema(table='Individuals', data= new_individuals.drop_duplicates())
 
 def add_resources():
     """Adding ERDERA as a resource to RD3"""
@@ -145,10 +156,11 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     """This function maps GPAP experiments to NGS sequencing in RD3"""
     ngs_sequencing = data[['ExperimentID', 'LocalExperimentID', 
                            'kit', 
-                        #    'Owner', 'erns', 
+                        #    'Owner', # TODO needs to be discussed
+                            # 'erns', # TODO needs to be discussed
                             'tissue', 'project', 'subproject', 
                            'Participant_ID',
-                        #    'Submitter_ID', # not sure what this is
+                        #    'Submitter_ID', # TODO not sure what this is
                            'library_strategy', 
                            'Sample_ID', 'library_source']]\
     .rename(columns={
@@ -158,16 +170,12 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
         'Owner': 'persons involved',
         'erns': 'affiliated organisations',
         'tissue': 'tissue type',
-        # 'project': 'included in resources',
-        # 'subproject': 'included in resources',
         'Participant_ID': 'individuals',
         #'Submitter_ID': '',
         'Sample_ID': 'sample id',
         'library_strategy': 'library strategy',
         'library_source': 'library source'
         })
-    #until API call is fixed
-    ngs_sequencing['individuals'] = environ['TMP_PARTICIPANT']
 
     ## map tissue type
     ontology_name = 'Tissue type'
@@ -194,7 +202,7 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     # ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
     ngs_sequencing = ngs_sequencing.drop(columns=[field_name])
 
-    ## map (sub)projects
+    ## map (sub)projects # TODO: this needs to be improved, is only necessary at initialization 
     # get the resources
     make_agent()
     make_endpoint()
@@ -202,8 +210,9 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     asyncio.run(upload_curation(client=client))
 
     # combine project and subproject from GPAP to included in resources in RD3
-    indices = ngs_sequencing.loc[ngs_sequencing['project'].isin(['LatinSeq ERDERA'])].index # tmp remove this project 
-    ngs_sequencing = ngs_sequencing.drop(indices, axis=0)
+    ngs_sequencing.loc[ngs_sequencing['project'].isin(['LatinSeq ERDERA']), 'project'] = 'ERDERA' # rename project LatinSeq ERDERA to ERDERA
+    # tmp remove subproject for now based on GPAP's comment
+    ngs_sequencing['subproject'] = None
     ngs_sequencing['included in resources'] = ngs_sequencing[['project', 'subproject']].apply(
         lambda x: ','.join(x.dropna()), axis=1
         )
