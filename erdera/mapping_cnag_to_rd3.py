@@ -36,13 +36,22 @@ def determine_new_participants(client: Client, data: pd.DataFrame):
 
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
+    # retrieve current pedigrees in RD3
+    current_pedigrees = client.get(table='Pedigree', as_df=True) 
 
     # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
-    pedigree = data[['famid', 'family_id', 'otheraffected', 'is new']].rename(columns={
+    pedigree = data[['famid', 'family_id', 'otheraffected']].rename(columns={
         'famid': 'id',
         'family_id':'alternate ids',
         'otheraffected': 'others affected'
     })
+
+    # check if family is new 
+    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
+
+    # for the is new pedigree true cases all mapping steps can be done immediately 
+    # for the falses we need to check if fields are different 
+    
 
     others_affected_dict = {
         'Yes': True,
@@ -54,6 +63,7 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
 
     pedigree = pedigree.drop_duplicates()
 
+    # set alternate ids and others affected
     for _, family in pedigree.iterrows():
         family_id = family['id']
         # retrieve the family IDs for this family
@@ -82,13 +92,14 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
     # upload
     client.save_schema(table='Pedigree', data=pedigree)
 
-    updated_records = pedigree.loc[pedigree['is new'] == False].copy() # get the records to be updated
+    # work in progress 
+    # updated_records = pedigree.loc[pedigree['is new'] == False].copy() # get the records to be updated
     current_pedigrees = client.get(table='Pedigree', as_df=True)
 
     current_pedigrees_ids = current_pedigrees['id']
-    updated_records['is new pedigree'] = ~updated_records['id'].isin(current_pedigrees_ids)
+    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
 
-    merged = updated_records.merge(current_pedigrees, on='id', how='inner', suffixes = ('_new', '_old'))
+    merged = pedigree.merge(current_pedigrees, on='id', how='inner', suffixes = ('_new', '_old'))
 
     changed_mask = (merged
                     .filter(like='_new')
@@ -101,10 +112,6 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
     for index, family in updated_records.iterrows():
         family_id = family['id']
         # if record is the same, ignore --> saves gpus and time
-        
-        
-
-
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
