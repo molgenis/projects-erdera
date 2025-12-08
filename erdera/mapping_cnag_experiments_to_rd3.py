@@ -4,6 +4,7 @@ import logging
 from os import environ
 import pandas as pd
 from molgenis_emx2_pyclient.client import Client
+from molgenis_emx2_pyclient.exceptions import PyclientException
 import asyncio
 import zipfile
 from zipfile import ZipFile
@@ -35,7 +36,7 @@ def map_individuals(data:pd.DataFrame, client: Client):
     client.save_schema(table='Individuals', data= new_individuals.drop_duplicates())
 
 def add_resources():
-    """Adding ERDERA as a resource to RD3"""
+    """Adding ERDERA as a resource to RD3. This function should be a part of a setting up script"""
     resources = pd.DataFrame({
         'id': ['ERDERA','EMX2 API'],
         'name': ['ERDERA', 'EMX2 API'],
@@ -47,7 +48,7 @@ def add_resources():
     resources.to_csv(f'{environ['OUTPUT_PATH']}Resources.csv', index=False)
 
 def make_endpoint():
-    """This function makes an endpoint necessary for the mapping"""
+    """This function makes an endpoint necessary for the mapping. This function should be a part of a setting up script"""
     # disabled
     endpoint = {'id':'main_fdp', 
                 'type': 'https://w3id.org/fdp/fdp-o#MetadataService,http://www.w3.org/ns/dcat#Resource,http://www.w3.org/ns/dcat#DataService,https://w3id.org/fdp/fdp-o#FAIRDataPoint',
@@ -65,7 +66,7 @@ def make_endpoint():
     pd.DataFrame([endpoint]).to_csv(f'{environ['OUTPUT_PATH']}Endpoint.csv', index=False)
 
 def make_agent(): 
-    """This function makes an agent 'molgenis'"""
+    """This function makes an agent 'molgenis'. This function should be a part of a setting up script"""
     # disabled
     agent = {
         'name': 'MOLGENIS',
@@ -152,12 +153,92 @@ async def match_ontology(ontology: str, gpap_data: list):
 
     return matches, unmatched
 
+def map_owner_to_organisation(owners: list):
+    """Upload the GPAP owners as organisations in CatalogueOntologies"""
+    ontologies_client = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+
+    organisations = ontologies_client.get(
+        table='Organisations', 
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        as_df=True)
+    
+    new_organisations = []
+    for owner in owners: 
+        new_row = {'name': owner}
+        new_organisations.append(new_row)
+
+    new_organisations_df = pd.DataFrame(new_organisations)
+
+    organisations = pd.concat((organisations, new_organisations_df))
+
+    # try to upload the organisations 
+    try:
+        ontologies_client.save_schema(table='Organisations', 
+                                  data=organisations)
+    except PyclientException: # the organisations are already added
+        print('Organisations contained duplicate keys and is not uploaded.')
+
+def map_erns_to_organisations(ngs_sequencing: pd.DataFrame):
+    """Mapping GPAP ERNs to organisation in CatalogueOntologies"""
+    # retrieve the ERNs mapping table 
+    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
+        ontology_mappings = client_ind.get(
+            table='Gpap erns',
+            schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
+            as_df=True
+        )
+
+    # get the ontologies client
+    ontologies_client = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+
+    # retrieve the organisations from the ontologies client 
+    organisations = ontologies_client.get(
+        table='Organisations', 
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        as_df=True)
+
+    # retrieve the new value (the RD3 value) of the ERNs
+    new_organisations = []
+    gpap_erns = ngs_sequencing['erns'].unique().tolist() # gather all unique erns as a list 
+    for gpap_ern in gpap_erns:
+        if gpap_ern == 'Not_Applicable':
+            print('NA')
+            ngs_sequencing.loc[ngs_sequencing['erns'] == gpap_ern, 'erns'] = None
+            print(ngs_sequencing.loc[ngs_sequencing['erns'] == gpap_ern, 'erns'])
+            continue
+        new_value_ern = ontology_mappings.loc[ontology_mappings['incoming value'] == gpap_ern, 'new value'].squeeze()
+        new_row = {'name': new_value_ern}
+        new_organisations.append(new_row)
+        ngs_sequencing.loc[ngs_sequencing['erns'] == gpap_ern, 'erns'] = new_value_ern
+    
+    new_organisations_df = pd.DataFrame(new_organisations)
+
+    organisations = pd.concat((organisations, new_organisations_df))
+
+    # upload the organisations with the ERNs 
+    try:
+        ontologies_client.save_schema(table='Organisations', 
+                                  data=organisations)
+    except PyclientException: 
+        print('Organisations contained duplicate keys and is not uploaded.')
+
+    return ngs_sequencing
+
+
 def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     """This function maps GPAP experiments to NGS sequencing in RD3"""
     ngs_sequencing = data[['ExperimentID', 'LocalExperimentID', 
                            'kit', 
-                        #    'Owner', # TODO needs to be discussed
-                            # 'erns', # TODO needs to be discussed
+                           'Owner', 
+                            'erns', 
                             'tissue', 'project', 'subproject', 
                            'Participant_ID',
                         #    'Submitter_ID', # TODO not sure what this is
@@ -167,8 +248,6 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
         'ExperimentID':'id',
         'LocalExperimentID': 'alternate ids',
         'kit': 'target enrichment kit',
-        'Owner': 'persons involved',
-        'erns': 'affiliated organisations',
         'tissue': 'tissue type',
         'Participant_ID': 'individuals',
         #'Submitter_ID': '',
@@ -241,6 +320,23 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
         unmatched_names)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 ontology term equivalent
     ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
+
+    ## map affiliated organisations based on erns and owner columns
+    owners = ngs_sequencing['Owner'].unique().tolist() # gather all unique owners as a list 
+    map_owner_to_organisation(owners=owners) # upload the owners as organisations
+
+    # erns = ngs_sequencing['erns'].unique().tolist() # gather all unique erns as a list 
+    ngs_sequencing = map_erns_to_organisations(ngs_sequencing) # upload the erns as organisations
+
+    ngs_sequencing['affiliated organisations'] = None
+    for index, row in ngs_sequencing.iterrows():
+        erns = row['erns']
+        owner = row['Owner']
+        if not pd.isna(erns):
+            ngs_sequencing.loc[index, 'affiliated organisations'] = ','.join(str(field) for field in [erns, owner] if pd.notna(field))
+
+    # remove erns and owner columns
+    ngs_sequencing = ngs_sequencing.drop(columns=['erns', 'Owner']) 
 
     client.save_schema(table = 'NGS sequencing', data=ngs_sequencing)
 
