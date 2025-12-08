@@ -92,7 +92,7 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
     # upload
     client.save_schema(table='Pedigree', data=pedigree)
 
-    # work in progress 
+    # work in progress - unfinished
     # updated_records = pedigree.loc[pedigree['is new'] == False].copy() # get the records to be updated
     current_pedigrees = client.get(table='Pedigree', as_df=True)
 
@@ -108,10 +108,6 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
                     )
     
     merged['changed'] = changed_mask
-
-    for index, family in updated_records.iterrows():
-        family_id = family['id']
-        # if record is the same, ignore --> saves gpus and time
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
@@ -474,7 +470,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     
 def build_import_variants(client: Client, data: pd.DataFrame):
     """Builds and import variant information from GPAP to RD3
-    # RD3 does not accept multiple inheritances, disabled for now -- TODO"""
+    # disabled for now -- unfinished"""
 
     variant_interpretations = data[[
         'inheritance'
@@ -508,7 +504,8 @@ def build_import_variants(client: Client, data: pd.DataFrame):
     client.save_schema(table='Variant interpretations', data=variant_interpretations)
 
 def build_import_genomic_variants(client: Client, data: pd.DataFrame):
-    """Builds and imports variant information from GPAP to RD3"""
+    """Builds and imports variant information from GPAP to RD3
+    Unfinished - disabled"""
     genomic_variant = data[['regions']].copy() # index 67
 
     for index, region in genomic_variant.iterrows():
@@ -519,7 +516,6 @@ def build_import_genomic_variants(client: Client, data: pd.DataFrame):
             for elem in region_entry:
                 genomic_variant.loc[index, 'id'] = elem.get('region')
                 genomic_variant.loc[index, 'chromosomal region'] = elem.get('region')
-
 
 if __name__ == "__main__":
 
