@@ -6,20 +6,19 @@ it into EMX2 ontology format
 
 import requests
 import pandas as pd
-from urllib import parse
+from tqdm import tqdm
 
 
 def get_gtex_tissue_types():
     """Retreive tissue type entries metadata"""
     url = 'https://gtexportal.org/api/v2/dataset/tissueSiteDetail?datasetId=gtex_v10&page=0&itemsPerPage=250'
-
     gtex = requests.Session()
     response = gtex.get(url)
     response.raise_for_status()
     return response.json()
 
 
-def get_ebi_term_meta(client, code: str = None):
+def get_ebi_term_meta(session, code: str = None, mapping_term: str = None):
     """Retrieve ontology term metadata"""
     encoded_iri = 'http%253A%252F%252Fwww.ebi.ac.uk%252Fefo%252F' \
         if 'EFO:' in code \
@@ -31,11 +30,12 @@ def get_ebi_term_meta(client, code: str = None):
         encoded_iri,
         code.replace(':', '_')
     ])
-    response = client.get(url)
+    response = session.get(url)
     response.raise_for_status()
 
     response_data = response.json()
     return {
+        'mapping_term': mapping_term,
         'name': response_data.get('label'),
         'codesystem': response_data.get('ontology_prefix'),
         'code': response_data.get('obo_id'),
@@ -46,10 +46,11 @@ def get_ebi_term_meta(client, code: str = None):
 
 if __name__ == '__main__':
 
-    # retrieve tissue types
+    # retrieve tissue types and create data structure
     data = pd.DataFrame(get_gtex_tissue_types()['data'])
     tissues_df = data[[
         'tissueSiteDetailId',
+        'tissueSiteDetail',
         'datasetId',
         'ontologyId',
         'ontologyIri'
@@ -58,12 +59,28 @@ if __name__ == '__main__':
     # retrieve ontology metadata from each tissue
     ebi = requests.Session()
     ontology = []
-    for value in tissues_df['ontologyId'].to_list():
-        term_entry = get_ebi_term_meta(ebi, value)
+    for row in tqdm(tissues_df[['ontologyId', 'tissueSiteDetail']].to_dict('records')):
+        term_entry = get_ebi_term_meta(
+            session=ebi,
+            code=row['ontologyId'],
+            mapping_term=row['tissueSiteDetail']
+        )
         ontology.append(term_entry)
 
+    # prepare ontology table
     ontology_df = pd.DataFrame(ontology)
+    ontology_df = ontology_df.sort_values('name')
+    ontology_df = ontology_df.reset_index()
     ontology_df['order'] = ontology_df.index
-    ontology_df = ontology_df[
-        ['order', 'name', 'codesystem', 'code', 'ontologyTermURI', 'definition']]
-    ontology_df.to_csv('../../model/lookups/tissue types.csv', index=False)
+
+    ontology_df['definition'] = ontology_df[['definition', 'mapping_term']] \
+        .agg(' GTex: '.join, axis=1)
+
+    # save data
+    ontology_df[
+        ['order', 'name', 'codesystem', 'code', 'ontologyTermURI', 'definition']
+    ] \
+        .to_csv('../../model/lookups/tissue types.csv', index=False)
+
+    ontology_df[['mapping_term', 'name']].to_csv(
+        '../../model/tissue mappings.csv', index=False)
