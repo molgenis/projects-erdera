@@ -1,6 +1,10 @@
-tableName,tableExtends,columnName,columnType,key,description
-Mappings,,,,,
-Mappings,,source,string,1,"Source of the value (e.g., organisation, API, endpoint, etc.)"
-Mappings,,incoming value,string,1,The value retrieved from the source
-Mappings,,target value,string,,The value that the external value should be mapped to
-Gpap,Mappings,,,,Reference lists extracted from GPAP
+tableName,tableExtends,columnName,columnType,key,defaultValue,description
+Mappings,,,,,,
+Mappings,,source,string,1,,"Source of the value (e.g., organisation, API, endpoint, etc.)"
+Mappings,,incoming value,string,1,,"The external value"
+Mappings,,new value,string,,,The value that the external value should be mapped to
+Mappings,,is obsolete,bool,,false,"if true, this mapping is obsolete"
+Mappings,,comment,text,,,Additional context about the mapping
+Gpap erns,Mappings,,,,,ERNs extracted from GPAP
+Gpap kits,Mappings,,,,,Kit list extracted from GPAP
+Gpap tissues,Mappings,,,,,Tissue list extracted from GPAP
