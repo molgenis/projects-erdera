@@ -5,6 +5,11 @@ Mappings,,incoming value,string,1,,"The external value"
 Mappings,,new value,string,,,The value that the external value should be mapped to
 Mappings,,is obsolete,bool,,false,"if true, this mapping is obsolete"
 Mappings,,comment,text,,,Additional context about the mapping
-Gpap erns,Mappings,,,,,ERNs extracted from GPAP
-Gpap kits,Mappings,,,,,Kit list extracted from GPAP
-Gpap tissues,Mappings,,,,,Tissue list extracted from GPAP
+Gpap,Mappings,,,,,All GPAP mappings
+Erns,Gpap,,,,,ERNs extracted from GPAP
+Experiment types,Gpap,,,,,Experiment type to Sequencing method mappings
+Instrument platforms,Gpap,,,,,Instrument Model to Sequencing platform mappings
+Instrument models,Gpap,,,,,Instrument model to Sequencing instrument model mappings
+Kits,Gpap,,,,,Kit list extracted from GPAP
+Sample types,Gpap,,,,,Sample types extracted from GPAP
+Tissue types,Gpap,,,,,Tissue list extracted from GPAP
