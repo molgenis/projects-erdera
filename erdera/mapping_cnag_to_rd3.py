@@ -7,7 +7,6 @@ from molgenis_emx2_pyclient.client import Client
 from dotenv import load_dotenv
 import ast
 import asyncio
-import numpy as np
 load_dotenv()
 
 logging.captureWarnings(True)
@@ -37,17 +36,22 @@ def determine_new_participants(client: Client, data: pd.DataFrame):
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
     # retrieve current pedigrees in RD3
-    current_pedigrees = client.get(table='Pedigree', as_df=True) 
+    # current_pedigrees = client.get(table='Pedigree', as_df=True) 
 
     # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
-    pedigree = data[['famid', 'family_id', 'otheraffected']].rename(columns={
+    # pedigree = data[['famid', 'family_id', 'otheraffected']].rename(columns={
+    #     'famid': 'id',
+    #     'family_id':'alternate ids',
+    #     'otheraffected': 'others affected'
+    # })
+
+    pedigree = data[['famid', 'family_id']].rename(columns={
         'famid': 'id',
-        'family_id':'alternate ids',
-        'otheraffected': 'others affected'
-    })
+        'family_id':'alternate ids'
+        })
 
     # check if family is new 
-    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
+    # pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
 
     # for the is new pedigree true cases all mapping steps can be done immediately 
     # for the falses we need to check if fields are different 
@@ -58,8 +62,8 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         'No': False
     }
 
-    pedigree['others affected'] = pedigree['others affected'].map(
-        others_affected_dict)
+    # pedigree['others affected'] = pedigree['others affected'].map(
+    #     others_affected_dict)
 
     pedigree = pedigree.drop_duplicates()
 
@@ -77,15 +81,15 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
             pedigree.loc[pedigree['id'] == family_id, 'alternate ids'] = ','.join(set(non_na))
 
         # get list of others affected field - i.e., are there other family members affected by the disease
-        others_affected = pedigree.loc[pedigree['id'] == family_id, 'others affected'].to_list()
-        non_na = [x for x in others_affected if not np.isnan(x)] # only keep non NA values
-        non_na_unique = set(non_na) # get the unique values
-        if len(non_na_unique) == 1: # set field
-            pedigree.loc[pedigree['id'] == family_id, 'others affected'] = next(iter(non_na_unique))
-        # if the length is more than 1, this field for this value is both True and False, 
-        # this cannot be the case so print a message to the user 
-        elif len(non_na_unique) > 1: 
-            print(f"Inconsistent values found for 'others affected' for family {family_id}: {non_na_unique}")
+        # others_affected = pedigree.loc[pedigree['id'] == family_id, 'others affected'].to_list()
+        # non_na = [x for x in others_affected if not np.isnan(x)] # only keep non NA values
+        # non_na_unique = set(non_na) # get the unique values
+        # if len(non_na_unique) == 1: # set field
+        #     pedigree.loc[pedigree['id'] == family_id, 'others affected'] = next(iter(non_na_unique))
+        # # if the length is more than 1, this field for this value is both True and False, 
+        # # this cannot be the case so print a message to the user 
+        # elif len(non_na_unique) > 1: 
+        #     print(f"Inconsistent values found for 'others affected' for family {family_id}: {non_na_unique}")
         
     pedigree = pedigree.drop_duplicates()
             
@@ -94,20 +98,20 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
 
     # work in progress - unfinished
     # updated_records = pedigree.loc[pedigree['is new'] == False].copy() # get the records to be updated
-    current_pedigrees = client.get(table='Pedigree', as_df=True)
+    # current_pedigrees = client.get(table='Pedigree', as_df=True)
 
-    current_pedigrees_ids = current_pedigrees['id']
-    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
+    # current_pedigrees_ids = current_pedigrees['id']
+    # pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
 
-    merged = pedigree.merge(current_pedigrees, on='id', how='inner', suffixes = ('_new', '_old'))
+    # merged = pedigree.merge(current_pedigrees, on='id', how='inner', suffixes = ('_new', '_old'))
 
-    changed_mask = (merged
-                    .filter(like='_new')
-                    .ne(merged.filter(like='_old').values)
-                    .any(axis=1)
-                    )
+    # changed_mask = (merged
+    #                 .filter(like='_new')
+    #                 .ne(merged.filter(like='_old').values)
+    #                 .any(axis=1)
+    #                 )
     
-    merged['changed'] = changed_mask
+    # merged['changed'] = changed_mask
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
@@ -253,8 +257,12 @@ def build_import_consent(client, data: pd.DataFrame):
     # upload the data
     client.save_schema(table='Individual consent', data=indv_consent)
 
-async def match_ontologies(ontology: str, gpap_data: dict):
-    """."""
+async def match_ontologies(ontology: str, gpap_data: dict, codesystem: bool):
+    """Checks for an ontology whether a GPAP value has a RD3 value, based on the code.
+    ontology = name of the ontology according to RD3
+    gpap_data = dictionary with the GPAP ontology values and corresponding codes
+    codesystem = whether the code includes the codesystem in RD3 (eg., HP:0000001)
+    """
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema='CatalogueOntologies',
@@ -266,7 +274,7 @@ async def match_ontologies(ontology: str, gpap_data: dict):
 
     overrides = molgenis.get(
         table='Ontology mappings',
-        schema='new staging area',
+        schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
         as_df=True
     )
     overrides = overrides.loc[overrides['ontology'] == ontology]
@@ -280,7 +288,10 @@ async def match_ontologies(ontology: str, gpap_data: dict):
     unmatched = []
     no_correct_name = []
     for ontology_value, code in gpap_data.items():
-        code_no_name = code.split(':')[1]
+        if not codesystem:
+            code_no_name = code.split(':')[1]
+        else:
+            code_no_name = code
         # Case 1: name match ignore (we only want mismatched names)
         if ontology_value in rd3_ontology['name'].values:
             continue
@@ -310,7 +321,7 @@ async def match_ontologies(ontology: str, gpap_data: dict):
     # upload the new unmatched phenotype ontology values
     output_path = environ['OUTPUT_PATH']
     pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}Ontology mappings.csv', index=False)
-    await molgenis.upload_file(file_path=f'{output_path}Ontology mappings.csv', schema="new staging area")
+    await molgenis.upload_file(file_path=f'{output_path}Ontology mappings.csv', schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'])
 
     # combine the new unmatched phenotypes with the already known unmatched phenotypes (but without a correct name)
     # -- these will be removed from the phenotype observations dataset to be uplaoded
@@ -371,7 +382,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
     # convert list to a dataframe
     disease_history = pd.DataFrame(disease_history2)
 
-    diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict))
+    diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict, False))
     disease_history['disease'] = disease_history['disease'].replace(diseases_dict)
 
     # get the unmatched diseases (the diseases from GPAP not present in RD3)
@@ -408,7 +419,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
         onset_dict)
 
     # upload the data
-    client.save_schema(table='Disease history', data=disease_history)
+    client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
     client.save_schema(table='Clinical observations', data=clinical_obs)
 
 def build_import_phenotype_observations(client, data: pd.DataFrame):
@@ -452,7 +463,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     phen_observations = pd.DataFrame(pheno_observations2)
 
     # map the phenotypic features from GPAP format to RD3
-    phen_dict, unmatched = asyncio.run(match_ontologies('Phenotypes', obs_dict))
+    phen_dict, unmatched = asyncio.run(match_ontologies('Phenotypes', obs_dict, True))
     phen_observations['type'] = phen_observations['type'].replace(phen_dict)
 
     # get the unmatched phenotypes (the phenotypes from GPAP not present in RD3)
@@ -462,6 +473,18 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         unmatched_names)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 phenotype equivalent
     phen_observations = phen_observations.drop(tmp, axis=0)
+
+    # check if the data is correct
+    # create a count for the phenotypes per individual - should be 1 for everyone 
+    result = phen_observations.drop_duplicates().groupby(['part of clinical observation', 'type']).size().reset_index(name='count')
+    logging.info('Checking whether the data is correct')
+    to_report = result[result['count'] > 1]
+    for index, row in to_report.iterrows():
+        partOfClinObs = row['part of clinical observation']
+        type = row['type']
+        print(f'For individual {partOfClinObs} the phenotype {type} is both observed and unobserved.')
+        indices_to_remove = phen_observations.loc[(phen_observations['part of clinical observation'] == partOfClinObs) & (phen_observations['type'] == type)].index
+        phen_observations = phen_observations.drop(indices_to_remove)
 
     # upload
     client.save_schema(table='Phenotype observations',
