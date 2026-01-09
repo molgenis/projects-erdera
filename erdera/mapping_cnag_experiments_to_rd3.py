@@ -55,7 +55,8 @@ def make_endpoint():
                 'name': "MOLGENIS Fair Data Point",
                 'version':'v1.2',
                 'description':'MOLGENIS FDP Endpoint for the catalogue data model',
-                'publisher':'MOLGENIS',
+                'publisher.resource':'ERDERA',
+                'publisher.id': 'MOLGENIS',
                 'language':'https://www.loc.gov/standards/iso639-2/php/langcodes_name.php?iso_639_1=en',
                 'license':'https://www.gnu.org/licenses/lgpl-3.0.html#license-text',
                 'conformsTo':'https://specs.fairdatapoint.org/fdp-specs-v1.2.html',
@@ -70,14 +71,15 @@ def make_agent():
     # disabled
     agent = {
         'name': 'MOLGENIS',
-        'logo': 'https://molgenis.org/assets/img/logo_green.png',
         'url': 'https://molgenis.org/',
         'mbox': 'support@molgenis.org',
-        'mg_draft': 'FALSE'
+        'mg_draft': 'FALSE',
+        'resource':'ERDERA',
+        'id': 'MOLGENIS'
     }
 
     # save agent
-    pd.DataFrame([agent]).to_csv(f'{environ['OUTPUT_PATH']}Agent.csv', index=False)
+    pd.DataFrame([agent]).to_csv(f'{environ['OUTPUT_PATH']}Agents.csv', index=False)
 
 async def upload_curation(client: Client):
     """Upload Resources, Agent, and Endpoint"""
@@ -85,7 +87,7 @@ async def upload_curation(client: Client):
     zip_file_name=f'{environ['OUTPUT_PATH']}archive.zip'
     # zip the data
     with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
-        my_zip.write(f'{environ['OUTPUT_PATH']}Agent.csv', 'Agent.csv')
+        my_zip.write(f'{environ['OUTPUT_PATH']}Agents.csv', 'Agents.csv')
         my_zip.write(f'{environ['OUTPUT_PATH']}Endpoint.csv', 'Endpoint.csv')
         my_zip.write(f'{environ['OUTPUT_PATH']}Resources.csv', 'Resources.csv')
     # upload the zipped file with the molgenis schema and the molgenis members
@@ -105,12 +107,12 @@ async def match_ontology(ontology: str, gpap_data: list):
     rd3_ontology = molgenis.get(
         table=ontology, schema='CatalogueOntologies', as_df=True)
 
-    hpo_overrides = molgenis.get(
+    overrides = molgenis.get(
         table='Ontology mappings',
         schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
         as_df=True
     )
-    hpo_overrides = hpo_overrides.loc[hpo_overrides['ontology'] == ontology]
+    overrides = overrides.loc[overrides['ontology'] == ontology]
 
     # save the matches (the once without a perfect name match)
     matches = {}
@@ -122,8 +124,8 @@ async def match_ontology(ontology: str, gpap_data: list):
         if ontology_term in rd3_ontology['name'].values:
             continue
         # Case 2: if the code is not known and has an override
-        elif ontology_term in hpo_overrides['invalid name'].values:
-            correct_name = hpo_overrides.loc[hpo_overrides['invalid name']
+        elif ontology_term in overrides['invalid name'].values:
+            correct_name = overrides.loc[overrides['invalid name']
                                                   == ontology_term, 'correct name']
             if pd.notna(correct_name.iloc[0]): # check if there is an overrride
                 matches[ontology_term] = correct_name.squeeze()
@@ -187,7 +189,7 @@ def map_erns_to_organisations(ngs_sequencing: pd.DataFrame):
     # retrieve the ERNs mapping table 
     with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
         ontology_mappings = client_ind.get(
-            table='Gpap erns',
+            table='Erns',
             schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
             as_df=True
         )
