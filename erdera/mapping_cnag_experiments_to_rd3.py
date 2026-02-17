@@ -40,7 +40,7 @@ def add_resources():
     resources = pd.DataFrame({
         'id': ['ERDERA','EMX2 API'],
         'name': ['ERDERA', 'EMX2 API'],
-        'type': ['Rare disease', 'Other type'],
+        'type': ['Registry', 'Registry'],
         'description': ['', 'The purpose of this is to test EMX2 API calls']
     })
 
@@ -93,11 +93,12 @@ async def upload_curation(client: Client):
     # upload the zipped file with the molgenis schema and the molgenis members
     await client.upload_file(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'], file_path=zip_file_name)
 
-async def match_ontology(ontology: str, gpap_data: list):
+async def match_ontology(ontology: str, gpap_data: list, ontology_mappings_name: str):
     """Match the GPAP ontology with the RD3's.
         
         ontology = the name of the RD3 ontology
         gpap_data = the GPAP ontology list (with the names)"""
+    
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema='CatalogueOntologies',
@@ -107,12 +108,52 @@ async def match_ontology(ontology: str, gpap_data: list):
     rd3_ontology = molgenis.get(
         table=ontology, schema='CatalogueOntologies', as_df=True)
 
-    overrides = molgenis.get(
-        table='Ontology mappings',
-        schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
+    # overrides = molgenis.get(
+    #     table='Ontology mappings',
+    #     schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
+    #     as_df=True
+    # )
+    # overrides = overrides.loc[overrides['ontology'] == ontology]
+
+    # # save the matches (the once without a perfect name match)
+    # matches = {}
+    # # and save the ones that do not have a name and/or code match
+    # unmatched = []
+    # no_correct_name = []
+    # for ontology_term in gpap_data:
+    #     # Case 1: name match ignore (we only want mismatched names)
+    #     if ontology_term in rd3_ontology['name'].values:
+    #         continue
+    #     # Case 2: if the code is not known and has an override
+    #     elif ontology_term in overrides['invalid name'].values:
+    #         correct_name = overrides.loc[overrides['invalid name']
+    #                                               == ontology_term, 'correct name']
+    #         if pd.notna(correct_name.iloc[0]): # check if there is an overrride
+    #             matches[ontology_term] = correct_name.squeeze()
+    #         else:
+    #             no_correct_name.append({
+    #                 'ontology': ontology,
+    #                 'invalid name': ontology_term
+    #             })
+    #     # Case 3: no match at all
+    #     else:
+    #         unmatched.append({
+    #             'ontology': ontology,
+    #             'invalid name': ontology_term
+    #         })
+
+
+    ontology_mappings_molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+
+    ontology_mappings = ontology_mappings_molgenis.get(
+        table=ontology_mappings_name,
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
         as_df=True
     )
-    overrides = overrides.loc[overrides['ontology'] == ontology]
 
     # save the matches (the once without a perfect name match)
     matches = {}
@@ -124,27 +165,30 @@ async def match_ontology(ontology: str, gpap_data: list):
         if ontology_term in rd3_ontology['name'].values:
             continue
         # Case 2: if the code is not known and has an override
-        elif ontology_term in overrides['invalid name'].values:
-            correct_name = overrides.loc[overrides['invalid name']
-                                                  == ontology_term, 'correct name']
+        elif ontology_term in ontology_mappings['incoming value'].values:
+            correct_name = ontology_mappings.loc[ontology_mappings['incoming value']
+                                                  == ontology_term, 'new value']
             if pd.notna(correct_name.iloc[0]): # check if there is an overrride
                 matches[ontology_term] = correct_name.squeeze()
             else:
                 no_correct_name.append({
-                    'ontology': ontology,
-                    'invalid name': ontology_term
+                    'incoming value': ontology_term
                 })
         # Case 3: no match at all
         else:
             unmatched.append({
-                'ontology': ontology,
-                'invalid name': ontology_term
+                'incoming value': ontology_term
             })
+
+    # # upload the new unmatched values
+    # output_path = environ['OUTPUT_PATH']
+    # pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}Ontology mappings.csv', index=False)
+    # await molgenis.upload_file(file_path=f'{output_path}Ontology mappings.csv', schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'])
 
     # upload the new unmatched values
     output_path = environ['OUTPUT_PATH']
-    pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}Ontology mappings.csv', index=False)
-    await molgenis.upload_file(file_path=f'{output_path}Ontology mappings.csv', schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'])
+    pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}{ontology_mappings_name}.csv', index=False)
+    await ontology_mappings_molgenis.upload_file(file_path=f'{output_path}{ontology_mappings_name}.csv', schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'])
 
     # combine the new unmatched values with the already known unmatched values (but without a correct name)
     # -- these will be removed from the rd3 dataset to be uploaded
@@ -180,7 +224,7 @@ def map_owner_to_organisation(owners: list):
     # try to upload the organisations 
     try:
         ontologies_client.save_schema(table='Organisations', 
-                                  data=organisations)
+                                  data=organisations[organisations['name'] != 'rumc-vissers'])
     except PyclientException: # the organisations are already added
         print('Organisations contained duplicate keys and is not uploaded.')
 
@@ -261,7 +305,8 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     ## map tissue type
     ontology_name = 'Tissue type'
     field_name = 'tissue type'
-    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name]))
+    ontology_mappings_name = 'Tissue types'
+    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name], ontology_mappings_name=ontology_mappings_name))
     ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
 
     unmatched_names = [entry['invalid name'] for entry in unmatched]
@@ -273,7 +318,8 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     ## map target enrichment kit
     ontology_name = 'Sequencing enrichment kits'
     field_name = 'target enrichment kit'
-    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name].to_list()))
+    ontology_mappings_name = 'Kits'
+    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name].to_list(), ontology_mappings_name=ontology_mappings_name))
     ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
 
     unmatched_names = [entry['invalid name'] for entry in unmatched]
@@ -302,26 +348,42 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     ## map library strategy
     ontology_name = 'Sequencing methods'
     field_name = 'library strategy'
-    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name]))
-    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
+    #matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name]))
 
-    unmatched_names = [entry['invalid name'] for entry in unmatched]
-    tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
-        unmatched_names)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology term equivalent
-    ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
+    methods_dict = {
+        'WGS': 'Whole Genome Sequencing',
+        'WXS': 'Whole Exome Sequencing'
+    }
+
+    # ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
+
+    # unmatched_names = [entry['invalid name'] for entry in unmatched]
+    # tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
+    #     unmatched_names)].index  # get the indices of the rows to remove (no match)
+    # # remove rows without a RD3 ontology term equivalent
+    # ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
+
+    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(methods_dict)
 
     ## map library source
     ontology_name = 'Library source'
     field_name = 'library source'
-    matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name]))
-    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
 
-    unmatched_names = [entry['invalid name'] for entry in unmatched]
-    tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
-        unmatched_names)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology term equivalent
-    ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
+    source_dict = {
+        'Other': 'other library source',
+        'Genomic': 'genomic source'
+    }
+
+    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(source_dict)
+
+    # matches, unmatched = asyncio.run(match_ontology(ontology=ontology_name, gpap_data=ngs_sequencing[field_name]))
+    # ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
+
+    # unmatched_names = [entry['invalid name'] for entry in unmatched]
+    # tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
+    #     unmatched_names)].index  # get the indices of the rows to remove (no match)
+    # # remove rows without a RD3 ontology term equivalent
+    # ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
 
     ## map affiliated organisations based on erns and owner columns
     owners = ngs_sequencing['Owner'].unique().tolist() # gather all unique owners as a list 
