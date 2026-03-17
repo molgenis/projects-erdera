@@ -3,6 +3,7 @@ analyses,,,,,,,,,,,,,,,,,,,,,
 analysis_sample,,,,,,,,,,,,,,,,,,,,,
 dataset,,,,,,,,,,,,,,,,,,,,,
 experiments,,,,,,,,,,,,,,,,,,,,,
+files,,,,,,,,,,,,,,,,,,,,,
 run_sample,,,,,,,,,,,,,,,,,,,,,
 runs,,,,,,,,,,,,,,,,,,,,,
 sample_file,,,,,,,,,,,,,,,,,,,,,
@@ -78,6 +79,25 @@ experiments,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status 
 experiments,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
 experiments,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
 experiments,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+files,,,provisional_id,,,,,,,,,,,,,,,,,,
+files,,,relative_path,,,,,,,,,,,,,,,,,,
+files,,,extension,,,,,,,,,,,,,,,,,,
+files,,,filesize,,,,,,,,,,,,,,,,,,
+files,,,encrypted_checksum,,,,,,,,,,,,,,,,,,
+files,,,encrypted_checksum_type,,,,,,,,,,,,,,,,,,
+files,,,unencrypted_checksum,,,,,,,,,,,,,,,,,,
+files,,,unencrypted_checksum_type,,,,,,,,,,,,,,,,,,
+files,,,status,,,,,,,,,,,,,,,,,,
+files,,,user_error_message,,,,,,,,,,,,,,,,,,
+files,,,created_at,,,,,,,,,,,,,,,,,,
+files,,,submission_provisional_id,,,,,,,,,,,,,,,,,,
+files,,,"submission_accession_id
+",,,,,,,,,,,,,,,,,,
+files,,,submission_title,,,,,,,,,,,,,,,,,,
+files,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+files,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+files,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+files,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
 run_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
 run_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
 run_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
