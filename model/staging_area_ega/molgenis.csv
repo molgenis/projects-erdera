@@ -1,0 +1,176 @@
+tableName,tableExtends,tableType,columnName,formLabel,columnType,key,required,readonly,refSchema,refTable,refLink,refBack,refLabel,defaultValue,validation,visible,computed,semantics,profiles,label,description
+analyses,,,,,,,,,,,,,,,,,,,,,
+analysis_sample,,,,,,,,,,,,,,,,,,,,,
+dataset,,,,,,,,,,,,,,,,,,,,,
+experiments,,,,,,,,,,,,,,,,,,,,,
+run_sample,,,,,,,,,,,,,,,,,,,,,
+runs,,,,,,,,,,,,,,,,,,,,,
+sample_file,,,,,,,,,,,,,,,,,,,,,
+samples,,,,,,,,,,,,,,,,,,,,,
+studies,,,,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,,,,,,,,,,,,,,,,,,,
+analyses,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+analyses,,,title,,,,,,,,,,,,,,,,,,
+analyses,,,description,,,,,,,,,,,,,,,,,,
+analyses,,,analysis_type,,,,,,,,,,,,,,,,,,
+analyses,,,experiment_types,,,,,,,,,,,,,,,,,,
+analyses,,,genome,,,,,,,,,,,,,,,,,,
+analyses,,,chromosomes,,text,,,,,,,,,,,,,,,,
+analyses,,,platform,,,,,,,,,,,,,,,,,,
+analyses,,,extra_attributes,,,,,,,,,,,,,,,,,,
+analyses,,,study_accession_id,,,,,,,,,,,,,,,,,,
+analyses,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+analyses,,,created_at,,,,,,,,,,,,,,,,,,
+analyses,,,edited_at,,,,,,,,,,,,,,,,,,
+analyses,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+analyses,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+analyses,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+analyses,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+analysis_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
+analysis_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+analysis_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
+analysis_sample,,,analysis_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+analysis_sample,,,study_accession_id,,,,,,,,,,,,,,,,,,
+analysis_sample,,,sample_attributes,,,,,,,,,,,,,,,,,,
+analysis_sample,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+analysis_sample,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+analysis_sample,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+analysis_sample,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+dataset,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+dataset,,,title,,,,,,,,,,,,,,,,,,
+dataset,,,description,,,,,,,,,,,,,,,,,,
+dataset,,,dataset_types,,,,,,,,,,,,,,,,,,
+dataset,,,technologies,,,,,,,,,,,,,,,,,,
+dataset,,,num_samples,,,,,,,,,,,,,,,,,,
+dataset,,,access_type,,,,,,,,,,,,,,,,,,
+dataset,,,extra_attributes,,,,,,,,,,,,,,,,,,
+dataset,,,is_in_beacon,,,,,,,,,,,,,,,,,,
+dataset,,,is_released,,,,,,,,,,,,,,,,,,
+dataset,,,released_date,,,,,,,,,,,,,,,,,,
+dataset,,,is_deprecated,,,,,,,,,,,,,,,,,,
+dataset,,,policy_accession_id,,,,,,,,,,,,,,,,,,
+dataset,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+dataset,,,created_at,,,,,,,,,,,,,,,,,,
+dataset,,,edited_at,,,,,,,,,,,,,,,,,,
+dataset,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+dataset,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+dataset,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+dataset,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+experiments,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+experiments,,,design_description,,,,,,,,,,,,,,,,,,
+experiments,,,library_name,,,,,,,,,,,,,,,,,,
+experiments,,,library_construction_protocol,,,,,,,,,,,,,,,,,,
+experiments,,,paired_nominal_length,,,,,,,,,,,,,,,,,,
+experiments,,,paired_nominal_sdev,,,,,,,,,,,,,,,,,,
+experiments,,,platform,,,,,,,,,,,,,,,,,,
+experiments,,,model,,,,,,,,,,,,,,,,,,
+experiments,,,library_layout,,,,,,,,,,,,,,,,,,
+experiments,,,library_strategy,,,,,,,,,,,,,,,,,,
+experiments,,,library_source,,,,,,,,,,,,,,,,,,
+experiments,,,library_selection,,,,,,,,,,,,,,,,,,
+experiments,,,extra_attributes,,,,,,,,,,,,,,,,,,
+experiments,,,study_accession_id,,,,,,,,,,,,,,,,,,
+experiments,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+experiments,,,created_at,,,,,,,,,,,,,,,,,,
+experiments,,,edited_at,,,,,,,,,,,,,,,,,,
+experiments,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+experiments,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+experiments,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+experiments,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+run_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
+run_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+run_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
+run_sample,,,run_accession_id,,,,,,,,,,,,,,,,,,
+run_sample,,,experiment_accession_id,,,,,,,,,,,,,,,,,,
+run_sample,,,study_accession_id,,,,,,,,,,,,,,,,,,
+run_sample,,,sample_attributes,,,,,,,,,,,,,,,,,,
+run_sample,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+run_sample,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+run_sample,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+run_sample,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+runs,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+runs,,,run_file_type,,,,,,,,,,,,,,,,,,
+runs,,,extra_attributes,,,,,,,,,,,,,,,,,,
+runs,,,sample_accession_id,,,,,,,,,,,,,,,,,,
+runs,,,experiment_accession_id,,,,,,,,,,,,,,,,,,
+runs,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+runs,,,created_at,,,,,,,,,,,,,,,,,,
+runs,,,edited_at,,,,,,,,,,,,,,,,,,
+runs,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+runs,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+runs,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+runs,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+sample_file,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+sample_file,,,sample_alias,,,,,,,,,,,,,,,,,,
+sample_file,,,file_name,,,,,,,,,,,,,,,,,,
+sample_file,,,file_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+sample_file,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+sample_file,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+sample_file,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+sample_file,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+samples,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+samples,,,alias,,,,,,,,,,,,,,,,,,
+samples,,,title,,,,,,,,,,,,,,,,,,
+samples,,,description,,,,,,,,,,,,,,,,,,
+samples,,,biological_sex,,,,,,,,,,,,,,,,,,
+samples,,,subject_id,,,,,,,,,,,,,,,,,,
+samples,,,phenotype,,,,,,,,,,,,,,,,,,
+samples,,,extra_attributes,,,,,,,,,,,,,,,,,,
+samples,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+samples,,,created_at,,,,,,,,,,,,,,,,,,
+samples,,,edited_at,,,,,,,,,,,,,,,,,,
+samples,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+samples,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+samples,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+samples,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+studies,,,accession_id,,,1,TRUE,,,,,,,,,,,,,,
+studies,,,title,,,,,,,,,,,,,,,,,,
+studies,,,description,,text,,,,,,,,,,,,,,,,
+studies,,,abstract,,,,,,,,,,,,,,,,,,
+studies,,,study_type,,,,,,,,,,,,,,,,,,
+studies,,,pubmed_ids,,,,,,,,,,,,,,,,,,
+studies,,,external_links,,,,,,,,,,,,,,,,,,
+studies,,,custom_tags,,,,,,,,,,,,,,,,,,
+studies,,,extra_attributes,,,,,,,,,,,,,,,,,,
+studies,,,submission_accession_id,,,,,,,,,,,,,,,,,,
+studies,,,created_at,,,,,,,,,,,,,,,,,,
+studies,,,edited_at,,,,,,,,,,,,,,,,,,
+studies,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+studies,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+studies,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+studies,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+study_analysis_sample,,,study_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_analysis_sample,,,study_title,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,study_type,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,analysis_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_analysis_sample,,,analysis_type,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,analysis_title,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_analysis_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,sample_title,,,,,,,,,,,,,,,,,,
+study_analysis_sample,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+study_analysis_sample,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+study_analysis_sample,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+study_analysis_sample,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
+study_experiment_run_sample,,,study_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_experiment_run_sample,,,study_title,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,study_type,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,instrument_platform,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,instrument_model,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,library_layout,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,library_name,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,library_strategy,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,library_source,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,library_selection,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,experiment_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_experiment_run_sample,,,run_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_experiment_run_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
+study_experiment_run_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,sample_title,,,,,,,,,,,,,,,,,,
+study_experiment_run_sample,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
+study_experiment_run_sample,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+study_experiment_run_sample,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
+study_experiment_run_sample,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
