@@ -9,3 +9,8 @@ node_modules
 
 # ignore files in tmp/
 tmp/*.csv
+
+.DS_Store
+.vscode/
+__pycache__/
+
