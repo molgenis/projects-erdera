@@ -17,7 +17,108 @@ logging.basicConfig(level=logging.INFO)
 logging.captureWarnings(True)
 log = logging.getLogger("GPAP API")
 
-def get_all_metadata():
+def prepare_run_metadata():
+    """Prepare run metadata object"""
+    return {
+        'id': f"{datetime.now().strftime("%Y-%m-%d")}-run-{datetime.now().strftime("%H%M")}",
+        'date of run': datetime.now().strftime("%Y-%m-%d"),
+        'ok': False,
+        'total number of datasets': 0,
+        'number of new datasets': 0,
+        'number of updated datasets': 0,
+        'total number of analyses': 0,
+        'number of new analyses': 0,
+        'number of updated analyses': 0,
+        'total number of analysis_samples': 0,
+        'number of new analysis_samples': 0,
+        'number of updated analysis_samples': 0,
+        'total number of experiments': 0,
+        'number of new experiments': 0,
+        'number of updated experiments': 0,
+        'total number of run_samples': 0,
+        'number of new run_samples': 0,
+        'number of updated run_samples': 0,
+        'total number of runs': 0,
+        'number of new runs': 0,
+        'number of updated runs': 0,
+        'total number of sample_files': 0,
+        'number of new sample_files': 0,
+        'number of updated sample_files': 0,
+        'total number of samples': 0,
+        'number of new samples': 0,
+        'number of updated samples': 0,
+        'total number of studies': 0,
+        'number of new studies': 0,
+        'number of updated studies': 0,
+        'total number of study_analysis_samples': 0,
+        'number of new study_analysis_samples': 0,
+        'number of updated study_analysis_samples': 0,
+        'total number of study_experiment_run_samples': 0,
+        'number of new study_experiment_run_samples': 0,
+        'number of updated study_experiment_run_samples': 0,
+        'total number of files': 0,
+        'number of new files': 0,
+        'number of updated files': 0,
+        'number of errors': 0,
+    }
+
+def upload_files():
+    '''Upload the files metadata to the staging area through the API. 
+    As long as we don't have access to the EGA API of a dataset, we receive the metadata in ZIP files,
+    these ZIPs do not include the files metadata. This is uploaded through the API endpoint'''
+    client = EGASubmissionsClient()
+    provisional_id = environ['PROVISIONAL_ID']
+
+    files = client.get_datasets_files(provisional_id=provisional_id)
+    files_df = pd.DataFrame(files['data'])
+
+    api_run_meta = prepare_run_metadata()
+
+    files_df['added by job'] = api_run_meta['id']
+
+    api_run_meta['total number of files'] = files_df.shape[0]
+
+    api_run_meta['number of errors'] = len(files['errors'])
+
+    if api_run_meta['number of errors'] == 0:
+        log.info('No errors detected')
+        api_run_meta['ok'] = True
+
+    api_run_errors = []
+    files_run_errors = pd.DataFrame(files['errors'])
+
+    if len(files_run_errors):
+        files_run_errors['type'] = 'EGA API files retrieval'
+        api_run_errors.extend(files_run_errors)
+
+    if api_run_errors:
+        api_run_errors = pd.DataFrame(api_run_errors)
+        api_run_errors['job'] = api_run_meta['id']
+
+    api_run_meta_df = pd.DataFrame([api_run_meta])
+    api_run_meta_df['ok'] = api_run_meta_df['ok'].replace({True:'true', False: 'false'})
+
+    # import datasets into Jobs schema
+    log.info("Importing data into the staging area")
+    with Client(url=os.getenv('EMX2_HOST'),
+                schema= os.getenv('JOBS_SCHEMA'),
+                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
+
+        molgenis.save_schema(table='Jobs Ega Api', data=api_run_meta_df)
+
+        if api_run_errors:
+            molgenis.save_schema(
+                table='Job errors', data=api_run_errors)
+    
+    # import datasets into the staging area 
+    with Client(url=os.getenv('EMX2_HOST'),
+                schema= os.getenv('EMX2_HOST_SCHEMA'),
+                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
+
+        molgenis.save_schema(table="files", data=files_df)
+
+
+def upload_metadata():
     """Retrieve all EGA data"""
     client = EGASubmissionsClient()
     provisional_id = environ['PROVISIONAL_ID']
@@ -206,146 +307,9 @@ def get_all_metadata():
         molgenis.save_schema(table="study_experiment_run_sample", data=study_experiment_run_sample_df)
         molgenis.save_schema(table="files", data=files_df)
 
-def prepare_run_metadata():
-    """Prepare run metadata object"""
-    return {
-        'id': f"{datetime.now().strftime("%Y-%m-%d")}-run-{datetime.now().strftime("%H%M")}",
-        'date of run': datetime.now().strftime("%Y-%m-%d"),
-        'ok': False,
-        'total number of datasets': 0,
-        'number of new datasets': 0,
-        'number of updated datasets': 0,
-        'total number of analyses': 0,
-        'number of new analyses': 0,
-        'number of updated analyses': 0,
-        'total number of analysis_samples': 0,
-        'number of new analysis_samples': 0,
-        'number of updated analysis_samples': 0,
-        'total number of experiments': 0,
-        'number of new experiments': 0,
-        'number of updated experiments': 0,
-        'total number of run_samples': 0,
-        'number of new run_samples': 0,
-        'number of updated run_samples': 0,
-        'total number of runs': 0,
-        'number of new runs': 0,
-        'number of updated runs': 0,
-        'total number of sample_files': 0,
-        'number of new sample_files': 0,
-        'number of updated sample_files': 0,
-        'total number of samples': 0,
-        'number of new samples': 0,
-        'number of updated samples': 0,
-        'total number of studies': 0,
-        'number of new studies': 0,
-        'number of updated studies': 0,
-        'total number of study_analysis_samples': 0,
-        'number of new study_analysis_samples': 0,
-        'number of updated study_analysis_samples': 0,
-        'total number of study_experiment_run_samples': 0,
-        'number of new study_experiment_run_samples': 0,
-        'number of updated study_experiment_run_samples': 0,
-        'total number of files': 0,
-        'number of new files': 0,
-        'number of updated files': 0,
-        'number of errors': 0,
-    }
 
 
 if __name__ == "__main__":
 
-    # # load api fields
-    # with open('ERDERA/scripts/clients/gpap_prod_api_fields.json',mode='r',encoding='utf-8') as file:
-    #     fields = json.load(file)
-    #     file.close()
-
-    # # init client
-    # gpap = GpapClient(
-    #     api_url=os.getenv("GPAP_PROD_API_URL"),
-    #     token=os.getenv('GPAP_API_TOKEN')
-    # )
-    # gpap.api_page_size = 100
-    # gpap.fields = fields
-
-    # # retrieve all participants
-    # participants: types.ParticipantsResponse = gpap.get_participants()
-
-    # # temporary workaround: calculate page sizes
-    # if (participants['total'] % gpap.api_page_size) != 0:
-    #     total_api_pages = math.ceil(participants['total'] / gpap.api_page_size)
-    # else:
-    #     total_api_pages = participants['total'] / gpap.api_page_size
-
-    # log.info("Fetching participant metadata (%s records over %s pages)",
-    #          participants['total'], total_api_pages)
-
-    # all_participants = get_all_metadata(
-    #     client=gpap,
-    #     meta_type='participants',
-    #     total_pages=total_api_pages
-    # )
-
-    # # retrieve all experiments
-    # experiments: types.ExperimentsResponse = gpap.get_experiments()
-    # log.info("Fetching experiment metadata (%s records over %s pages)",
-    #          experiments['_meta']['total_items'],
-    #          experiments['_meta']['total_pages'])
-
-    # all_experiments = get_all_metadata(
-    #     client=gpap,
-    #     meta_type='experiments',
-    #     total_pages=experiments['_meta']['total_pages']
-    # )
-
-    # # prepare exports and job metadata
-    # api_run_meta = prepare_run_metadata()
-
-    # participants_df = pd.DataFrame(all_participants['data'])
-    # experiments_df = pd.DataFrame(all_experiments['data'])
-
-    # participants_df['added by job'] = api_run_meta['id']
-    # experiments_df['added by job'] = api_run_meta['id']
-
-    # api_run_meta['total number of participants'] = participants_df.shape[0]
-    # api_run_meta['total number of experiments'] = experiments_df.shape[0]
-    # api_run_meta['number of errors'] = len(all_participants['errors']) + \
-    #     len(all_experiments['errors'])
-
-    # if api_run_meta['number of errors'] == 0:
-    #     log.info('No errors detected')
-    #     api_run_meta['ok'] = True
-
-    # # prepare error messages
-    # api_run_errors = []
-    # participants_run_errors = pd.DataFrame(all_participants['errors'])
-    # experiments_run_errors = pd.DataFrame(all_experiments['errors'])
-
-    # if len(participants_run_errors):
-    #     participants_run_errors['type'] = 'GPAP API participants retrieval'
-    #     api_run_errors.extend(participants_run_errors)
-
-    # if len(experiments_run_errors):
-    #     experiments_run_errors['type'] = 'GPAP API Experiments retrieval'
-    #     api_run_errors.extend(experiments_run_errors)
-
-    # if api_run_errors:
-    #     api_run_errors = pd.DataFrame(api_run_errors)
-    #     api_run_errors['job'] = api_run_meta['id']
-
-    # api_run_meta_df = pd.DataFrame([api_run_meta])
-    # api_run_meta_df['ok'] = api_run_meta_df['ok'].replace({True:'true', False: 'false'})
-
-    # import datasets into staging area
-    log.info("Importing data into the staging area")
-    with Client(url=os.getenv('EMX2_HOST'),
-                schema= os.getenv('EMX2_HOST_SCHEMA'),
-                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
-
-        molgenis.save_schema(table='Jobs Gpap Api', data=api_run_meta_df)
-
-        if api_run_errors:
-            molgenis.save_schema(
-                table='Job errors', data=api_run_errors)
-
-        molgenis.save_schema(table="Participants", data=participants_df)
-        molgenis.save_schema(table="Experiments", data=experiments_df)
+    upload_metadata()
+    
