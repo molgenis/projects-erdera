@@ -37,7 +37,7 @@ def determine_new_participants(client: Client, data: pd.DataFrame):
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
     # retrieve current pedigrees in RD3
-    current_pedigrees = client.get(table='Pedigree', as_df=True) 
+    # current_pedigrees = client.get(table='Pedigree', as_df=True) 
 
     # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
     pedigree = data[['famid', 'family_id', 'otheraffected']].rename(columns={
@@ -47,7 +47,7 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
     })
 
     # check if family is new 
-    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
+    # pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
 
     # for the is new pedigree true cases all mapping steps can be done immediately 
     # for the falses we need to check if fields are different 
@@ -83,9 +83,10 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         if len(non_na_unique) == 1: # set field
             pedigree.loc[pedigree['id'] == family_id, 'others affected'] = next(iter(non_na_unique))
         # if the length is more than 1, this field for this value is both True and False, 
-        # this cannot be the case so print a message to the user 
-        elif len(non_na_unique) > 1: 
-            print(f"Inconsistent values found for 'others affected' for family {family_id}: {non_na_unique}")
+        # this means that for at least one family members the 'others affected' was set to True, meaning
+        # that this field can be set to True for all family members 
+        elif len(non_na_unique) == 2: 
+            pedigree.loc[pedigree['id'] == family_id, 'others affected'] = True
         
     pedigree = pedigree.drop_duplicates()
             
@@ -125,6 +126,7 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     individual_status_dict = {
         'Deceased': 'Dead'
     }
+
     individuals['individual status'] = individuals['individual status'].replace(
         individual_status_dict)
 
@@ -180,7 +182,7 @@ def build_import_pedigree_members(client, data: pd.DataFrame):
             if len(relative) != 0:
                 pedigree_members.loc[index, 'relative'] = relative
             else:  # this should not be the case and should be flagged as an error
-                print(f'no diseases relative for individual: {member.get('individual')} from family: {famid}')
+                print(f'no diseased relative for individual: {member.get('individual')} from family: {famid}')
                 unclear_members.append({'individual': member.get('individual'),
                                         'family ID': famid})
 
@@ -253,23 +255,28 @@ def build_import_consent(client, data: pd.DataFrame):
     # upload the data
     client.save_schema(table='Individual consent', data=indv_consent)
 
-async def match_ontologies(ontology: str, gpap_data: dict):
-    """."""
+async def match_ontologies(ontology: str, gpap_data: dict, gpap_field_name: str, mappings_name: str):
+    """
+    ontology = name of the ontology as in RD3
+    gpap_data = a dictionary of the GPAP values with the corresponding code 
+    gpap_field_name = the name of the field in GPAP 
+    mappings_name = the name of the table in the ontology mappings schema
+    """
     molgenis = Client(
         environ['MOLGENIS_HOST'],
-        schema='CatalogueOntologies',
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
         token=environ['MOLGENIS_TOKEN']
     )
     # get phenotypes ontology and overrides
     rd3_ontology = molgenis.get(
-        table=ontology, schema='CatalogueOntologies', as_df=True)
+        table=ontology, schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'], as_df=True)
 
     overrides = molgenis.get(
-        table='Ontology mappings',
-        schema='new staging area',
+        table=mappings_name,
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
         as_df=True
     )
-    overrides = overrides.loc[overrides['ontology'] == ontology]
+    # overrides = overrides.loc[overrides['ontology'] == ontology]
 
     # create dictionary of RD3 code and ontology name
     code_to_name = dict(zip(rd3_ontology['code'], rd3_ontology['name']))
@@ -281,36 +288,40 @@ async def match_ontologies(ontology: str, gpap_data: dict):
     no_correct_name = []
     for ontology_value, code in gpap_data.items():
         code_no_name = code.split(':')[1]
+        # in RD3 we include the codesystem in the code for the phenotypes
+        if ontology == 'Phenotypes': # to do: can be a better solution
+            code_no_name = code
+        ontology_value_no_code = ontology_value[0]
         # Case 1: name match ignore (we only want mismatched names)
-        if ontology_value in rd3_ontology['name'].values:
+        if ontology_value_no_code in rd3_ontology['name'].values:
             continue
         # Case 2: code match save to match_dict
         elif code_no_name in code_to_name:
             match_dict[ontology_value] = code_to_name[code_no_name]
         # Case 3: if the code is not known and has an override
-        elif code in overrides['invalid code'].values:
-            correct_name = overrides.loc[overrides['invalid code']
-                                                  == code]['correct name']
+        elif code in overrides['incoming code'].values:
+            correct_name = overrides.loc[overrides['incoming code']
+                                                  == code]['new value']
             if pd.notna(correct_name.iloc[0]): # check if there is an overrride
                 match_dict[ontology_value] = correct_name.squeeze()
             else:
                 no_correct_name.append({
-                    'ontology': ontology,
-                    'invalid code': code,
-                    'invalid name': ontology_value
+                    'source': f'phenostore_service/api/participants_by_exp/{gpap_field_name}',
+                    'incoming value': ontology_value,
+                    'incoming code': code
                 })
         # Case 4: no match at all
         else:
             unmatched.append({
-                'ontology': ontology,
-                'invalid code': code,
-                'invalid name': ontology_value
+                'source': f'phenostore_service/api/participants_by_exp/{gpap_field_name}',
+                'incoming value': ontology_value,
+                'incoming code': code
             })
 
     # upload the new unmatched phenotype ontology values
     output_path = environ['OUTPUT_PATH']
-    pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}Ontology mappings.csv', index=False)
-    await molgenis.upload_file(file_path=f'{output_path}Ontology mappings.csv', schema="new staging area")
+    pd.DataFrame(unmatched).drop_duplicates().to_csv(f'{output_path}{mappings_name}.csv', index=False)
+    await molgenis.upload_file(file_path=f'{output_path}{mappings_name}.csv', schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'])
 
     # combine the new unmatched phenotypes with the already known unmatched phenotypes (but without a correct name)
     # -- these will be removed from the phenotype observations dataset to be uplaoded
@@ -363,24 +374,32 @@ def build_import_disease_history(client, data: pd.DataFrame):
                         new_entry['disease'] = disease.get('ordo').get('name')
                         new_entry['disease status'] = disease.get(
                             'status')  # e.g., confirmed, suspected
+                        new_entry['disease code'] = disease.get('ordo').get('id')
                         disease_history2.append(new_entry)
                         # save the disease names with code as prevalent in GPAP
-                        diseases_dict[disease.get('ordo').get('name')] = disease.get('ordo').get(
-                            'id')
+                        diseases_dict[f'{disease.get('ordo').get('name')},{disease.get('ordo').get(
+                            'id')}'] = disease.get('ordo').get('id')
 
     # convert list to a dataframe
     disease_history = pd.DataFrame(disease_history2)
 
-    diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict))
-    disease_history['disease'] = disease_history['disease'].replace(diseases_dict)
+    diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict, 'diagnosis', 'Diseases'))
+    # make tuple of the key 
+    diseases_dict = {tuple(k.split(',')): v for k, v in diseases_dict.items()}
+    # map the disease based on the name + code 
+    disease_history['disease'] = disease_history.apply(lambda row: diseases_dict.get((row['disease'], row['disease code']), row['disease']), axis=1)
+    #disease_history['disease'] = disease_history['disease'].replace(diseases_dict)
 
     # get the unmatched diseases (the diseases from GPAP not present in RD3)
     # only get the name without the code
-    unmatched_names = [entry['invalid name'] for entry in unmatched]
-    tmp = disease_history.loc[disease_history['disease'].isin(
-        unmatched_names)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 disease equivalent
-    disease_history = disease_history.drop(tmp, axis=0)
+    unmatched_names = [entry['incoming value'] for entry in unmatched]
+    to_delete = [tuple(item.split(',')) for item in unmatched_names]
+    mask = ~disease_history.apply(lambda row: (row['disease'], row['disease code']) in to_delete, axis=1)
+    disease_history = disease_history[mask]
+    # tmp = disease_history.loc[disease_history['disease'].isin(
+    #     unmatched_names)].index  # get the indices of the rows to remove (no match)
+    # # remove rows without a RD3 disease equivalent
+    # disease_history = disease_history.drop(tmp, axis=0)
 
     # map the disease status
     status_dict = {
@@ -406,9 +425,12 @@ def build_import_disease_history(client, data: pd.DataFrame):
     }
     clinical_obs['age group at onset'] = clinical_obs['age group at onset'].map(
         onset_dict)
+    
+    # remove the disease code field 
+    disease_history = disease_history.drop(columns=['disease code'])
 
     # upload the data
-    client.save_schema(table='Disease history', data=disease_history)
+    client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
     client.save_schema(table='Clinical observations', data=clinical_obs)
 
 def build_import_phenotype_observations(client, data: pd.DataFrame):
@@ -423,7 +445,6 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
                               table='Clinical observations',
                               as_df=True)
 
-    # capture individual's auto id
     pheno_observations2 = []
     obs_dict = {}
     for index, pheno_obs in phen_observations.iterrows():
@@ -443,25 +464,46 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
                         new_entry['type'] = observation.get('name')
                         # observed (GPAP) and excluded (RD3) have opposite meanings, so negate boolean
                         new_entry['excluded'] = not observation.get('observed')
+                        new_entry['phenotype code'] = observation.get('id')
                         pheno_observations2.append(new_entry)
                         # save the phenotype names with code as prevalent in GPAP
-                        obs_dict[observation.get('name')] = observation.get(
-                            'id')  # only get code (without HP:)
+                        obs_dict[(observation.get('name'),observation.get('id'))] = observation.get('id')
+                        # obs_dict[observation.get('name')] = observation.get(
+                        #     'id')  # only get code (without HP:)
+
 
     # convert phenotypic observations list to df
     phen_observations = pd.DataFrame(pheno_observations2)
 
     # map the phenotypic features from GPAP format to RD3
-    phen_dict, unmatched = asyncio.run(match_ontologies('Phenotypes', obs_dict))
-    phen_observations['type'] = phen_observations['type'].replace(phen_dict)
+    phen_dict, unmatched = asyncio.run(match_ontologies('Phenotypes', obs_dict, 'features', 'Phenotypes'))
+    # phen_observations['type'] = phen_observations['type'].replace(phen_dict)
+    phen_observations['type'] = phen_observations.apply(lambda row: phen_dict.get((row['type'], row['phenotype code']), row['type']), axis=1)
 
     # get the unmatched phenotypes (the phenotypes from GPAP not present in RD3)
     # only get the name without the HP code
-    unmatched_names = [entry['invalid name'] for entry in unmatched]
-    tmp = phen_observations.loc[phen_observations['type'].isin(
-        unmatched_names)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 phenotype equivalent
-    phen_observations = phen_observations.drop(tmp, axis=0)
+    unmatched_names = [entry['incoming value'] for entry in unmatched]
+    # tmp = phen_observations.loc[phen_observations['type'].isin(
+    #     unmatched_names)].index  # get the indices of the rows to remove (no match)
+    # # remove rows without a RD3 phenotype equivalent
+    # phen_observations = phen_observations.drop(tmp, axis=0)
+
+    mask = ~phen_observations.apply(lambda row: (row['type'], row['phenotype code']) in unmatched_names, axis=1)
+    phen_observations = phen_observations[mask]
+
+    phen_observations = phen_observations.drop(columns=['phenotype code'])
+    
+    # there are (at least) two cases where the excluded value is both true and false for an individual
+    # this is not possible since it would mean that a phenotypic feature is both observed and not-observed
+    # print and log this and remove from the df 
+    data_entry_errors = phen_observations.groupby(['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
+    phen_observations = phen_observations[~data_entry_errors]
+
+    # print(f"Error! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
+    # the excluded field is both true and false for a phenotypic feature - removing the rows")
+    
+    logging.warning(f"Error! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
+    the excluded field is both true and false for a phenotypic feature - removing the rows")
 
     # upload
     client.save_schema(table='Phenotype observations',
@@ -506,7 +548,7 @@ def build_import_variants(client: Client, data: pd.DataFrame):
 def build_import_genomic_variants(client: Client, data: pd.DataFrame):
     """Builds and imports variant information from GPAP to RD3
     Unfinished - disabled"""
-    genomic_variant = data[['regions']].copy() # index 67
+    genomic_variant = data[['regions']].copy() 
 
     for index, region in genomic_variant.iterrows():
         region_entry = region.get('regions')
