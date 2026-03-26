@@ -25,7 +25,7 @@ analyses,,,submission_accession_id,,,,,,,,,,,,,,,,,,
 analyses,,,created_at,,,,,,,,,,,,,,,,,,
 analyses,,,edited_at,,,,,,,,,,,,,,,,,,
 analyses,,,Job metadata,,section,,,,,,,,,,,,,,,,Information about the status of the record after a job run
-analyses,,,added by job,,ref,1,TRUE,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
+analyses,,,added by job,,ref,,,,Jobs,Jobs,,,,,,,,,,,A link to the job where the record was first introduced
 analyses,,,was processed,,bool,,,,,,,,,FALSE,,,,,,,"If true, the record was mapped into RD3"
 analyses,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (e.g., errors, warnings, etc.)"
 analysis_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
@@ -94,7 +94,7 @@ files,,,comments,,text,,,,,,,,,,,,,,,,"Additional information about the record (
 run_sample,,,sample_alias,,,,,,,,,,,,,,,,,,
 run_sample,,,sample_accession_id,,,1,TRUE,,,,,,,,,,,,,,
 run_sample,,,biosample_id,,,,,,,,,,,,,,,,,,
-run_sample,,,run_accession_id,,,,,,,,,,,,,,,,,,
+run_sample,,,run_accession_id,,,1,TRUE,,,,,,,,,,,,,,
 run_sample,,,experiment_accession_id,,,,,,,,,,,,,,,,,,
 run_sample,,,study_accession_id,,,,,,,,,,,,,,,,,,
 run_sample,,,sample_attributes,,,,,,,,,,,,,,,,,,
