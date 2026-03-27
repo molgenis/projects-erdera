@@ -20,8 +20,6 @@ Instrument platforms,Gpap,,,,,Instrument Model to Sequencing platform mappings,,
 Instrument platforms,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing platforms
 Instrument models,Gpap,,,,,Instrument model to Sequencing instrument model mappings,,
 Instrument models,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing instrument models
-Kits,Gpap,,,,,Kit list extracted from GPAP,,
-Kits,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,
 Life status,Gpap,,,,,Life Status to individual status mappings,,
 Life status,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Individual status
 Sample types,Gpap,,,,,Sample types extracted from GPAP,,
