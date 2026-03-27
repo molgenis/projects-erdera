@@ -1,19 +1,36 @@
-tableName,tableExtends,columnName,columnType,key,defaultValue,description
-Mappings,,,,,,
-Mappings,,source,string,1,,"Source of the value (e.g., organisation, API, endpoint, etc.)"
-Mappings,,incoming value,string,1,,"The external value"
-Mappings,,new value,string,,,The value that the external value should be mapped to
-Mappings,,is obsolete,bool,,false,"if true, this mapping is obsolete"
-Mappings,,comment,text,,,Additional context about the mapping
-Gpap,Mappings,,,,,All GPAP mappings
-Age of onset,Gpap,,,,,Onset to age group at onsent
-Erns,Gpap,,,,,ERNs extracted from GPAP
-Experiment types,Gpap,,,,,Experiment type to Sequencing method mappings
-Gender at birth,Gpap,,,,,Sex to gender at birth mappings
-Inheritance,Gpap,,,,,Inheritance mappings from GPAP
-Instrument platforms,Gpap,,,,,Instrument Model to Sequencing platform mappings
-Instrument models,Gpap,,,,,Instrument model to Sequencing instrument model mappings
-Kits,Gpap,,,,,Kit list extracted from GPAP
-Life status,Gpap,,,,,Life Status to individual status mappings
-Sample types,Gpap,,,,,Sample types extracted from GPAP
-Tissue types,Gpap,,,,,Tissue list extracted from GPAP
+tableName,tableExtends,columnName,columnType,key,defaultValue,description,refSchema,refTable
+Mappings,,,,,,,,
+Mappings,,source,string,1,,"Source of the value (e.g., organisation, API, endpoint, etc.)",,
+Mappings,,incoming value,string,1,,"The external value",,
+Mappings,,incoming code,string,,,,,
+Mappings,,is obsolete,bool,,false,"if true, this mapping is obsolete",,
+Mappings,,comment,text,,,Additional context about the mapping,,
+Gpap,Mappings,,,,,All GPAP mappings,,
+Age of onset,Gpap,,,,,Onset to age group at onsent,,
+Age of onset,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Age groups at onset
+Erns,Gpap,,,,,ERNs extracted from GPAP,,
+Erns,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Organisations
+Experiment types,Gpap,,,,,Experiment type to Sequencing method mappings,,
+Experiment types,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing methods
+Gender at birth,Gpap,,,,,Sex to gender at birth mappings,,
+Gender at birth,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Gender at birth
+Inheritance,Gpap,,,,,Inheritance mappings from GPAP,,
+Inheritance,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Inheritance pattern
+Instrument platforms,Gpap,,,,,Instrument Model to Sequencing platform mappings,,
+Instrument platforms,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing platforms
+Instrument models,Gpap,,,,,Instrument model to Sequencing instrument model mappings,,
+Instrument models,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing instrument models
+Kits,Gpap,,,,,Kit list extracted from GPAP,,
+Kits,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,
+Life status,Gpap,,,,,Life Status to individual status mappings,,
+Life status,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Individual status
+Sample types,Gpap,,,,,Sample types extracted from GPAP,,
+Sample types,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Sample type
+Tissue types,Gpap,,,,,Tissue list extracted from GPAP,,
+Tissue types,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Tissue type
+Diseases,Gpap,,,,,Diseases that could not be mapped to RD3,,
+Diseases,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Diseases
+Phenotypes,Gpap,,,,,Phenotypes that could not be mapped to RD3,,
+Phenotypes,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Phenotypes
+Library source,Gpap,,,,,Library source list extracted from GPAP,,
+Library source,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Library source
