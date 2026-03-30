@@ -4,9 +4,10 @@ from os import environ
 import sys
 import logging
 from typing import TypedDict
-import xlsxwriter
-from molgenis_emx2_pyclient import Client
 from dotenv import load_dotenv
+import xlsxwriter
+from openpyxl.utils.cell import get_column_letter
+from molgenis_emx2_pyclient import Client
 load_dotenv()
 
 logging.captureWarnings(True)
@@ -91,10 +92,11 @@ if __name__ == "__main__":
                 lookups_sheet.write(ontRowIndex, lookupIndex, row['name'])
 
             # set formula in template_sheet
-            source_formula = f"=OFFSET(lookups!A1,0,COLUMN()*{lookupIndex},{len(ontology)},1)"
-            template_sheet.data_validation(
-                1, index, 250, index,
-                {'validate': 'custom', 'source': source_formula})
+            SOURCE_FORMULA: str = get_column_letter(lookupIndex+1)
+            for formulaRowIndex in range(2, 50, 1):
+                CELL: str = f"{get_column_letter(index)}{formulaRowIndex}"
+                template_sheet.data_validation(
+                    CELL, {'validate': 'list', 'source': f'=lookups!{SOURCE_FORMULA}:{SOURCE_FORMULA}'})
 
             lookupIndex += 1
 
