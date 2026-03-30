@@ -89,112 +89,30 @@ class EGASubmissionsClient:
                 logger.warning(page_error['message'])
 
                 return output
+            
+    def get_endpoint_dataset(self, provisional_id: str, endpoint: str = None):
+        """Get the general dataset information"""
+        url = f'{self.api_url}/datasets/{provisional_id}'
+        if endpoint:
+            url += f'/{endpoint}'
+        return self.get(url=url)
         
-    def get_record_counts(self, url: str=None):
-        """Retrieve EGA-API-Total-Count"""
-        try:
-            response = self.session.head(url).headers
-            return response['EGA-API-Total-Count']
-        except requests.exceptions.HTTPError as error:
-            print(error)
-            return None
-    
-    def get_submissions(self):
-        """Get the submission information"""
-        url = f'{self.api_url}/datasets'
-        return self.get(url) 
-    
     def get_dataset_information(self, provisional_id: str=None):
         """Get the dataset information"""
         url = f'{self.api_url}/datasets/{provisional_id}'
         return self.get(url)
     
-    def get_datasets_studies(self, provisional_id: str=None):
-        """Get the  information"""
-        url = f'{self.api_url}/datasets/{provisional_id}/studies'
-        return self.get(url)
-    
-    def get_datasets_samples(self, provisional_id: str=None):
-        """Get the submission information"""
-        url = f'{self.api_url}/datasets/{provisional_id}/samples'
-        return self.get(url)
-    
-    def get_datasets_analyses(self, provisional_id: str=None):
-        """Get the submission information"""
-        url = f'{self.api_url}/datasets/{provisional_id}/analyses'
-        return self.get(url)
-    
-    def get_datasets_files(self, provisional_id: str=None):
-        """Get the files of a dataset"""
-        url = f'{self.api_url}/datasets/{provisional_id}/files'
-        return self.get(url=url)
-    
-    def get_datasets_mappings_sample_file(self, provisional_id: str=None):
-        """Get the mapping between sample and file of a dataset"""
-        url = f'{self.api_url}/datasets/{provisional_id}/mappings/sample_file'
+    def get_endpoint_studies(self, study_id: str, endpoint: str = None):
+        url = f'{self.api_url}/studies/{study_id}'
+        if endpoint:
+            url += f'/{endpoint}'
         return self.get(url=url)
         
-    def get_datasets_mappings_analysis_sample(self, provisional_id: str=None):
-        """Get the mapping between sample and the analysis of a dataset"""
-        url = f'{self.api_url}/datasets/{provisional_id}/mappings/analysis_sample'
-        return self.get(url=url)
-    
-    def get_datasets_mappings_study_analysis_sample(self, provisional_id: str=None):
-        """Get the mapping between sample, the analysis, and the study"""
-        url = f'{self.api_url}/datasets/{provisional_id}/mappings/study_analysis_sample'
-        return self.get(url=url)
-    
-    def get_datasets_experiments(self, provisional_id: str=None):
-        """Get the experiments"""
-        url = f'{self.api_url}/datasets/{provisional_id}/experiments'
-        return self.get(url=url)
-    
-    def get_datasets_runs(self, provisional_id: str=None):
-        """Get the runs"""
-        url = f'{self.api_url}/datasets/{provisional_id}/runs'
-        return self.get(url=url)
-    
-    def get_datasets_mappings_run_sample(self, provisional_id: str=None):
-        """Get the mapping between sample and runs"""
-        url = f'{self.api_url}/datasets/{provisional_id}/mappings/run_sample'
-        return self.get(url=url)
-    
-    def get_datasets_mappings_study_experiment_run_sample(self, provisional_id: str=None):
-        """Get the mapping between study, experiment, runs, and samples"""
-        url = f'{self.api_url}/datasets/{provisional_id}/mappings/study_experiment_run_sample'
-        return self.get(url=url)
-    
     def get_studies_information(self, study_id: str=None):
         """Get study information"""
         url = f'{self.api_url}/studies/{study_id}'
         return self.get(url=url)
     
-    def get_studies_datasets(self, study_id: str=None):
-        """Get the datasets of a study"""
-        url = f'{self.api_url}/studies/{study_id}/datasets'
-        return self.get(url=url)
-    
-    
-    
-# client_ega = EGASubmissionsClient()
-# client_ega.get_submissions()
-# client_ega.get_files(provisional_id='EGAD50000002187')
-# client_ega.get_mappings_sample_file(provisional_id='EGAD50000002187')
-
-# # client_ega.get_dataset_mappings_sample_file(provisional_id='EGAD50000002187')
-# headers = {'Authorization':'Bearer {}'.format(environ['TOKEN'])}
-
-# session = requests.Session()
-# api_url = environ['API_URL']
-# provisional_id='EGAD50000002187'
-# url = f'{api_url}/{provisional_id}/mappings/analysis_sample'
-# url = f'{api_url}/enums/library_sources'
-
-# tmp = session.get(url, headers=headers)
-# tmp_df = pd.DataFrame(tmp)
-# tmp_df
-
-# requests.get(url, headers=headers)
 
 
 
