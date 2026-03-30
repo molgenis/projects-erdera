@@ -32,3 +32,5 @@ Phenotypes,Gpap,,,,,Phenotypes that could not be mapped to RD3,,
 Phenotypes,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Phenotypes
 Library source,Gpap,,,,,Library source list extracted from GPAP,,
 Library source,,new value,ontology,,,The value that the external value should be mapped to,CatalogueOntologies,Library source
+Kits,Gpap,,,,,The kits extracted from GPAP,,
+Kits,,new value,,,,The new value the kit should be mapped to,,
