@@ -18,16 +18,16 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logging.captureWarnings(True)
-log = logging.getLogger("GPAP API")
+log = logging.getLogger("API Client")
 
 if __name__ == '__main__':
 
-    # create and retrieve reference lists
     gpap = GpapClient(
-        api_url=os.getenv("GPAP_PROD_API_URL"),
-        token=os.getenv('GPAP_API_TOKEN')
+        api_url=os.getenv("GPAP_HOST_API"),
+        token=os.getenv('GPAP_HOST_TOKEN')
     )
 
+    # create and retrieve reference lists
     log.info('Retrieving erns, kits, and tissue reflists....')
     erns: list[types.NameValue] = gpap.get_ref_erns()
     kits: list[types.NameValue] = gpap.get_ref_kits()
@@ -51,6 +51,6 @@ if __name__ == '__main__':
     with Client(url=os.getenv('EMX2_HOST'),
                 schema='Ontology mappings',
                 token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
-        # molgenis.save_schema('Gpap erns', data=erns_df)
-        # molgenis.save_schema('Gpap kits', data=kits_df)
+        molgenis.save_schema('Gpap erns', data=erns_df)
+        molgenis.save_schema('Gpap kits', data=kits_df)
         molgenis.save_schema('Gpap tissues', data=tissue_df)
