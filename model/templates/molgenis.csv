@@ -1,0 +1,5 @@
+tableName,tableExtends,columnName,columnType,key,required,description
+templates,,,,,,Record of templates generated for download
+templates,,id,auto_id,1,TRUE,an auto ID that identifies a particular creation of a template
+templates,,date created,date,,,date the template was created
+templates,,file,file,,,Excel template created
