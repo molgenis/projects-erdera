@@ -69,7 +69,7 @@ if __name__ == "__main__":
     ega_output_data = {}
     endpoints = ['studies', 'samples', 'analyses', 'files', 'mappings/sample_file', 'mappings/analysis_sample', \
                  'mappings/study_analysis_sample', 'experiments', 'runs', 'mappings/run_sample', 'mappings/study_experiment_run_sample']
-    
+    # endpoints = ['files']
     client = EGASubmissionsClient()
     provisional_id = environ['PROVISIONAL_ID']
 
@@ -80,7 +80,10 @@ if __name__ == "__main__":
         try:
             logging.info(f'Fetching data from {endpoint}')
             endpoint_clean = endpoint.replace('mappings/', '')
-            response = client.get_endpoint_dataset(provisional_id=provisional_id, endpoint=endpoint)
+            include_headers = True
+            if endpoint == 'files':
+                include_headers = False
+            response = client.get_endpoint_dataset(provisional_id=provisional_id, endpoint=endpoint, include_headers=include_headers)
             dataset = pd.DataFrame(response.get('data'))
             dataset['added by job'] = api_run_meta['id']   
             ega_output_data[endpoint_clean] = dataset
@@ -95,7 +98,7 @@ if __name__ == "__main__":
 
     # fetching the information from the datasets endpoint
     logging.info('Fetching data from datasets')
-    response = client.get_dataset_information(provisional_id=provisional_id)
+    response = client.get_dataset_information(provisional_id=provisional_id, include_headers=False)
     dataset = pd.DataFrame([response.get('data')])
     dataset['added by job'] = api_run_meta['id']   
     ega_output_data['dataset'] = dataset

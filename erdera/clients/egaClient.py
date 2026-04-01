@@ -6,7 +6,6 @@ Sample (individual), Analysis (CRAM, crai, gVCF, phenopacket), and Dataset.
 import logging
 import requests
 from dotenv import load_dotenv
-import pandas as pd
 from os import environ
 
 load_dotenv()
@@ -54,7 +53,7 @@ class EGASubmissionsClient:
         self.access_token = tokens['access_token']
         self.refresh_token = tokens['refresh_token']
 
-    def get(self, url: str = None):
+    def get(self, url: str = None, include_headers: bool = True):
         """wrapper around session.get"""
         output = {
             'data': [],
@@ -64,7 +63,10 @@ class EGASubmissionsClient:
         # set the header with the token
         headers = {'Authorization': f'Bearer {self.access_token}'}
         try:
-            response = self.session.get(url, headers=headers)
+            if include_headers:
+                response = self.session.get(url, headers=headers)
+            else: 
+                response = self.session.get(url)
             response.raise_for_status() # so the error is thrown
             output['data'] = response.json()
             return output
@@ -90,17 +92,17 @@ class EGASubmissionsClient:
 
                 return output
             
-    def get_endpoint_dataset(self, provisional_id: str, endpoint: str = None):
+    def get_endpoint_dataset(self, provisional_id: str, endpoint: str = None, include_headers: bool = True):
         """Get the general dataset information"""
         url = f'{self.api_url}/datasets/{provisional_id}'
         if endpoint:
             url += f'/{endpoint}'
-        return self.get(url=url)
+        return self.get(url=url, include_headers=include_headers)
         
-    def get_dataset_information(self, provisional_id: str=None):
+    def get_dataset_information(self, provisional_id: str=None, include_headers: bool = True):
         """Get the dataset information"""
         url = f'{self.api_url}/datasets/{provisional_id}'
-        return self.get(url)
+        return self.get(url, include_headers=include_headers)
     
     def get_endpoint_studies(self, study_id: str, endpoint: str = None):
         url = f'{self.api_url}/studies/{study_id}'
@@ -112,14 +114,3 @@ class EGASubmissionsClient:
         """Get study information"""
         url = f'{self.api_url}/studies/{study_id}'
         return self.get(url=url)
-    
-
-
-
-
-
-
-
-
-    
-

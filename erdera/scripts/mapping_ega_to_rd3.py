@@ -33,17 +33,10 @@ def add_resources(client: Client):
         'num_samples': 'number of participants'
     })
 
-    dataset['website'] = f'https://ega-archive.org/datasets/{dataset['id'][0]}'
+    dataset['website'] = dataset['id'].apply(lambda x: f'https://ega-archive.org/datasets/{x}')
     dataset['type'] = 'Registry'
-    dataset['start year'] = pd.to_datetime(dataset['start year']).dt.year
+    dataset['start year'] = dataset['start year'].apply(lambda x: pd.to_datetime(x).year if not pd.isna(x) else x)
 
-    # determine the number of individuals with sample information
-    analysis_samples = get_staging_area_data(endpoint='analysis_sample')
-    
-    participants_with_samples = [participant_id for participant_id in analysis_samples['biosample_id']]
-    # set the number of participants with samples (with None filtered out)
-    num_individuals_with_samples_dataset = len(set(filter(lambda x: x is not pd.NA, participants_with_samples)))
-    dataset['number of participants with samples'] = num_individuals_with_samples_dataset
     dataset_accession_id = dataset['id'][0]
 
     # add the EGA study
@@ -65,12 +58,8 @@ def add_resources(client: Client):
     study['type'] = 'Registry'
 
     # Add number of participants
-    study['number of participants'] = dataset['number of participants'].sum()
-    # individuals = self.client.get_datasets_samples(provisional_id=self.provisional_id)
-    # study_df['number of participants'] = len(individuals)
-
-    # add number of participants with samples (using biosample_id - todo: needs to be discussed)
-    study['number of participants with samples'] = dataset['number of participants with samples'].sum()
+    # Note: this assumes all datasets in the table are part of this study
+    study['number of participants'] = dataset['number of participants'].astype('Int64').sum()
 
     # add the child networks (the EGA datasets belonging to this study)
     study['child networks'] = ','.join(dataset['id'])
@@ -101,8 +90,9 @@ def ega_to_files(client: Client, accession_ids: str):
     }
     files['checksum type'] = files['checksum type'].replace(checksum_dict)
 
-    ### included in resources
-    files['included in resources'] = ','.join(accession_ids.values())
+    ### included in resources 
+    # TODO: add the corresponding EGAD number (need to establish link between files and dataset ID)
+    files['included in resources'] = accession_ids['study_id']
 
     # transform format to do: move this to the ontology mappings schema
     format_dict = {
