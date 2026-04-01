@@ -4,21 +4,23 @@ from os import environ
 import sys
 import logging
 import xlsxwriter
+from typing import TypedDict
 from openpyxl.utils.cell import get_column_letter
 from molgenis_emx2_pyclient import Client
+from molgenis_emx2_pyclient.metadata import Schema, Table, Column
 from dotenv import load_dotenv
 load_dotenv()
 
 logging.captureWarnings(True)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
-log = logging.getLogger("Bulk Upload Template Generator: ")
+log = logging.getLogger("Template Generator")
 
 # set params
 HOST: str = environ['MOLGENIS_HOST']
 TOKEN: str = environ['MOLGENIS_TOKEN']
 
-SCHEMA: str = "RD3"
-TABLES: list[str] = ['Individuals']
+SCHEMA: str = "rd3"
+TABLES: list[str] = ['Samples OGM', 'Experiments OGM']
 
 MAX_TEMPLATE_ROWS: int = 250
 
@@ -26,142 +28,217 @@ MAX_TEMPLATE_ROWS: int = 250
 client = Client(url=HOST, token=TOKEN)
 
 
-def check_for_ontology_types(meta) -> bool:
-    """Determine if any column is an ontology type"""
-    count: int = 0
-    for col in meta:
-        if col.columnType == 'ONTOLOGY':
-            count += 1
-    return count > 0
+class WorkbookStyles(TypedDict):
+    """Workbook formats"""
+    header_required: dict
+    header_default: dict
+    cell_required: dict
 
 
-def create_template_worksheet(new_sheet, table_metadata, styles, lookup_sheet=None):
-    """Create a new worksheet and add to workbook"""
-    template_index: int = 0
-    lookup_index: int = 0
+class BuildTemplate:
+    """Build template"""
 
-    for column in table_metadata:
-        log.info('Writing column %s into template...', column.name)
-        tempate_index_letter: str = get_column_letter(template_index+1)
+    def __init__(self,
+                 schema: str, tables: list[str], max_template_rows: int = 250):
+        """New template generator
+
+        :param schema: name of the schema
+        :type schema: str
+
+        :param tables: names of the tables that exist in the schema
+        :type tables: str[]
+
+        :param max_template_rows: number of rows to prefill with styles, validation, etc.
+        :type max_template_rows: int
+
+        """
+        self.output_filename = f"{schema}.xlsx"
+        self.schema = schema
+        self.tables = tables
+
+        self.max_template_rows = max_template_rows
+
+        self.should_build_lookup_sheet = False
+        self.lookups_col_index = 0
+        self.lookups = []
+
+    def column_is_required(self, column: Column) -> bool:
+        """Determine if a column is required based on schema metadata
+
+        :param column: metadata object for a column
+        :type column: Column
+
+        :returns: bool
+        """
         is_key = column.key > 0 if column.get('key') else False
-        is_required = column.get('required')
+        is_req = column.get('required')
+        return is_key and is_req
 
-        if is_key is True or is_required is True:
-            new_sheet.write(0,
-                            template_index,
-                            column.name,
-                            styles['header']['required'])
+    def write_sheet_header(self,
+                           sheet,
+                           column: Column,
+                           styles: WorkbookStyles,
+                           col_index: int = 0):
+        """Write a column header to a sheet
 
-            # apply cell styles for the first n rows
-            for template_row_cell in range(1, MAX_TEMPLATE_ROWS):
-                new_sheet.write(template_row_cell,
-                                template_index,
-                                None,
-                                styles['cell']['required'])
-        else:
-            new_sheet.write(0,
-                            template_index,
-                            column.name,
-                            styles['header']['default'])
+        :param sheet: a workbook.worksheet
 
-        # determine if column is an ontology type and create lookups
-        ontology_table = column.get("refTableName")
-        if column.columnType.startswith('ONTOLOGY') and ontology_table is not None and lookup_sheet:
-            ontology_schema: str = SCHEMA
+        :param column: metadata object for a column
+        :type column: Column
 
-            if bool(column.get('refSchemaId')):
-                ontology_schema = column.refSchemaId
+        :param col_index: the column to write the header into (zero index)
+        :type col_index: int
 
-            log.info('Creating lookup for %s from %s...',
-                     column.name,
-                     ontology_schema)
+        """
+        current_header_style = styles['header_default']
+        if self.column_is_required(column=column):
+            current_header_style = styles['header_required']
 
-            lookup_sheet.write(0,
-                               lookup_index,
-                               ontology_table,
-                               styles['header']['default'])
+        sheet.write(0, col_index, column.name, current_header_style)
 
-            ontology = client.get(table=ontology_table,
+    def column_is_ontology_type(self, column: Column) -> bool:
+        """Determine if the column is ONTOLOGY or ONTOLOGY_ARRAY"""
+        return column.columnType.startswith('ONTOLOGY')
+
+    def table_has_ontology_types(self, table_meta: Table) -> bool:
+        """Determine if there are ONTOLOGY types in a table"""
+        count: int = 0
+        for column in table_meta:
+            if self.column_is_ontology_type(column=column):
+                count += 1
+        return count > 0
+
+    def build_sheet(self,
+                    workbook, sheet_name: str,
+                    column_metadata: list[Column],
+                    styles: WorkbookStyles):
+        """Build worksheet from schema metadata
+
+        :param sheet_name: name of the new workbook sheet to create
+        :type sheet_name: str
+
+        :param column_metadata: column metadata from emx2 pyclient
+        :type column_metadata: list[Column]
+        """
+        new_sheet = workbook.add_worksheet(name=sheet_name)
+        index: int = 0
+        for column in column_metadata:
+            log.info('Processing column %s', column.name)
+            # write header
+            self.write_sheet_header(sheet=new_sheet,
+                                    column=column,
+                                    styles=styles,
+                                    col_index=index)
+
+            # determine if ontology table is present
+            ontology_table: str = column.get('refTableName')
+            should_build_ontology: bool = self.column_is_ontology_type(
+                column=column) and ontology_table is not None
+
+            if should_build_ontology:
+                log.info('Creating lookup from %s', ontology_table)
+                self.should_build_lookup_sheet = True
+                ontology_schema: str = self.schema
+
+                if bool(column.get('refSchemaId')):
+                    ontology_schema = column.refSchemaId
+
+                data = client.get(table=ontology_table,
                                   columns=['name'],
                                   schema=ontology_schema)
 
-            for ontology_row_index, row in enumerate(ontology):
-                lookup_sheet.write(ontology_row_index+1,
-                                   lookup_index,
-                                   row['name'])
+                lookups_col: str = get_column_letter(self.lookups_col_index+1)
+                lookup = {
+                    'header': ontology_table,
+                    'data': list(data),
+                    'lookups_col': lookups_col,
+                    'lookups_col_index': self.lookups_col_index,
+                    'template_col': get_column_letter(index+1),
+                    'template_col_index': index,
+                    'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)}"
+                }
+                # print(lookup)
+                self.lookups.append(lookup)
+                self.lookups_col_index += 1
 
-            # set formula in template_sheet
-            lookup_index_letter: str = get_column_letter(lookup_index+1)
-            dv_source: str = f"=lookups!{lookup_index_letter}2:{lookup_index_letter}{len(ontology)}"
+            # iterate over rows in the sheet: apply styles and/or validation
+            if self.column_is_required(column=column):
+                for row_index in range(1, self.max_template_rows):
+                    new_sheet.write(row_index,
+                                    index,
+                                    None,
+                                    styles['cell_required'])
+            # apply validation
+            if should_build_ontology:
+                for row_index in range(1, self.max_template_rows):
+                    output_row_col: str = f"{lookup['template_col']}{row_index+1}"
+                    new_sheet.data_validation(
+                        output_row_col,
+                        {'validate': 'list', 'source': lookup['formula']}
+                    )
 
-            for dv_row_index in range(1, MAX_TEMPLATE_ROWS, 1):
-                new_sheet.data_validation(f"{tempate_index_letter}{dv_row_index+1}",
-                                          {'validate': 'list', 'source': dv_source})
-            lookup_index += 1
-        template_index += 1
+            index += 1
+        new_sheet.autofit()
+
+    def build(self, metadata: Schema):
+        """Build template"""
+        workbook = xlsxwriter.Workbook(filename=self.output_filename)
+
+        # set styles
+        header_default = workbook.add_format({'border': 1})
+        header_required = workbook.add_format({
+            'bottom': 1,
+            'bg_color': '#ADE1FF',
+            'bold': True
+        })
+
+        cell_required = workbook.add_format({
+            'border': 1,
+            'bg_color': '#cbcbcb'
+        })
+        cell_required.set_border_color('#cbcbcb')
+
+        styles: WorkbookStyles = {'header_default': header_default,
+                                  'header_required': header_required,
+                                  'cell_required': cell_required}
+
+        for table in self.tables:
+            log.info('Building sheet for %s', table)
+            table_meta = metadata.get_table(by='name', value=table)
+
+            excluded_types = ['SECTION', 'HEADING']
+            col_meta = [
+                col for col in table_meta.columns
+                if col.columnType not in excluded_types and not col.name.startswith('mg_')
+            ]
+
+            self.build_sheet(workbook=workbook,
+                             sheet_name=table,
+                             column_metadata=col_meta,
+                             styles=styles)
+
+        if self.should_build_lookup_sheet:
+            log.info('Creating lookup sheet')
+            lookups_sheet = workbook.add_worksheet(name='lookups')
+            for lookup in self.lookups:
+                lookups_sheet.write(
+                    0,
+                    lookup['lookups_col_index'],
+                    lookup['header'],
+                    styles['header_default'])
+
+                for index, row in enumerate(lookup['data']):
+                    lookups_sheet.write(
+                        index+1, lookup['lookups_col_index'], row['name'])
+
+            lookups_sheet.autofit()
+            lookups_sheet.protect()
+        workbook.close()
 
 
 if __name__ == "__main__":
-    log.info("Building template from: %s....", SCHEMA)
+    log.info("Building bulk upload template from %s", SCHEMA)
 
-    # create workbook
-    output_file: str = f"{SCHEMA}.xlsx"
-    wb = xlsxwriter.Workbook(filename=output_file)
-
-    # define workbook styles
-    wb_styles = {
-        'header': {
-            'default': wb.add_format({'bottom': 1}),
-            'required': wb.add_format({
-                'bottom': 1,
-                'bg_color': '#ADE1FF',
-                'bold': True
-            })
-        },
-        'cell': {
-            'required': wb.add_format({
-                'border': 1,
-                'bg_color': '#f6f6f6'
-            })
-        }
-    }
-
-    wb_styles['cell']['required'].set_border_color("#cbcbcb")
-
-    # retrieve schema metadata
     schema_meta = client.get_schema_metadata(name=SCHEMA)
-    excluded_columnTypes = ['SECTION', 'HEADING']
-
-    # build sheets
-    lookups_sheet = None
-
-    for table in TABLES:
-        table_meta = schema_meta.get_table(by="name", value=table)
-        cols_meta = [
-            col for col in table_meta.columns
-            if col.columnType not in excluded_columnTypes and not col.name.startswith('mg_')
-        ]
-
-        template_sheet = wb.add_worksheet(name=table)
-        if check_for_ontology_types(cols_meta):
-            lookups_sheet = wb.add_worksheet(name='lookups')
-            create_template_worksheet(
-                new_sheet=template_sheet,
-                table_metadata=cols_meta,
-                lookup_sheet=lookups_sheet,
-                styles=wb_styles
-            )
-        else:
-            create_template_worksheet(
-                new_sheet=template_sheet,
-                table_metadata=cols_meta,
-                styles=wb_styles
-            )
-
-        template_sheet.autofit()
-
-    # additional config
-    lookups_sheet.autofit()
-    lookups_sheet.protect()
-
-    wb.close()
+    template = BuildTemplate(SCHEMA, TABLES)
+    template.build(metadata=schema_meta)
