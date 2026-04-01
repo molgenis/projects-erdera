@@ -1,6 +1,6 @@
 """
 Fetch EGA data using the egaClient
-This script logs into the EGA API and fetches the metadata belonging to an EGA dataset
+This script logs into the EGA API and fetches the metadata belonging to an EGA dataset (with provisional ID)
 """
 
 import os
@@ -69,7 +69,6 @@ if __name__ == "__main__":
     ega_output_data = {}
     endpoints = ['studies', 'samples', 'analyses', 'files', 'mappings/sample_file', 'mappings/analysis_sample', \
                  'mappings/study_analysis_sample', 'experiments', 'runs', 'mappings/run_sample', 'mappings/study_experiment_run_sample']
-    # endpoints = ['files']
     client = EGASubmissionsClient()
     provisional_id = environ['PROVISIONAL_ID']
 
@@ -98,8 +97,8 @@ if __name__ == "__main__":
 
     # fetching the information from the datasets endpoint
     logging.info('Fetching data from datasets')
-    response = client.get_dataset_information(provisional_id=provisional_id, include_headers=False)
-    dataset = pd.DataFrame([response.get('data')])
+    response = client.get_endpoint_dataset(provisional_id=provisional_id, include_headers=False)
+    dataset2 = pd.DataFrame([response.get('data')])
     dataset['added by job'] = api_run_meta['id']   
     ega_output_data['dataset'] = dataset
     if response.get('errors'):

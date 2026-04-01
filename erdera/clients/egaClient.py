@@ -1,6 +1,6 @@
 """
-This script queries the EGA API to retrieve the following information: Submission, Study,
-Sample (individual), Analysis (CRAM, crai, gVCF, phenopacket), and Dataset.
+This script queries the EGA API to retrieve the dataset information 
+according to an endpoint the user can specify.
 """
 
 import logging
@@ -93,24 +93,17 @@ class EGASubmissionsClient:
                 return output
             
     def get_endpoint_dataset(self, provisional_id: str, endpoint: str = None, include_headers: bool = True):
-        """Get the general dataset information"""
+        """Get the dataset information with a user-specified endpoint. If no endpoint is given, the generic
+        dataset endpoint is called."""
         url = f'{self.api_url}/datasets/{provisional_id}'
         if endpoint:
             url += f'/{endpoint}'
         return self.get(url=url, include_headers=include_headers)
         
-    def get_dataset_information(self, provisional_id: str=None, include_headers: bool = True):
-        """Get the dataset information"""
-        url = f'{self.api_url}/datasets/{provisional_id}'
-        return self.get(url, include_headers=include_headers)
-    
     def get_endpoint_studies(self, study_id: str, endpoint: str = None):
+        """Get the studies information with a user-specified endpoint. If no endpoint is given, the generic 
+        studies endpoint is called."""
         url = f'{self.api_url}/studies/{study_id}'
         if endpoint:
             url += f'/{endpoint}'
-        return self.get(url=url)
-        
-    def get_studies_information(self, study_id: str=None):
-        """Get study information"""
-        url = f'{self.api_url}/studies/{study_id}'
         return self.get(url=url)

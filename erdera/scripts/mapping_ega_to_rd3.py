@@ -22,7 +22,7 @@ def get_staging_area_data(endpoint: str):
         )
     
 def add_resources(client: Client): 
-    """Create resources table based on datasets from the EGA."""
+    """Create resources table based on datasets and studies from the EGA."""
     ## Add the EGA datasets part of the EGA study as seperate resource entries
     dataset = get_staging_area_data(endpoint='dataset')[['accession_id', 'title', 'description', \
                                                          'num_samples', 'created_at']]
@@ -72,6 +72,7 @@ def add_resources(client: Client):
             'study_id': study_accession_id} # return accession IDs
     
 def ega_to_files(client: Client, accession_ids: str):
+    """Map file metadata from the EGA staging area to RD3's Files"""
     # get EGA files
     files = get_staging_area_data(endpoint='files')[[
         'accession_id', 'unencrypted_checksum', 'unencrypted_checksum_type', 'extension'
@@ -84,7 +85,7 @@ def ega_to_files(client: Client, accession_ids: str):
         'extension': 'format'
     })
 
-    # checksum type to do: move this to the ontology mappings schema
+    # checksum type TODO: move this to the ontology mappings schema
     checksum_dict = {
         'SHA256': 'SHA-256'
     }
@@ -94,7 +95,7 @@ def ega_to_files(client: Client, accession_ids: str):
     # TODO: add the corresponding EGAD number (need to establish link between files and dataset ID)
     files['included in resources'] = accession_ids['study_id']
 
-    # transform format to do: move this to the ontology mappings schema
+    # transform format TODO: move this to the ontology mappings schema
     format_dict = {
         'fastq.gz': 'FASTQ',
         'fq.gz': 'FASTQ',
