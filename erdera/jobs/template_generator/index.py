@@ -16,17 +16,16 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 log = logging.getLogger("Template Generator")
 
 # set params
-SCHEMA: str = "rd3"
-TABLES: list[str] = ['Samples OGM', 'Experiments OGM']
-
 # SCHEMA: str = "pet store"
 # TABLES: list[str] = ['Pet', 'Order', 'Category']
-
+HOST: str = environ['MOLGENIS_HOST'] if environ.get(
+    'MOLGENIS_HOST') else 'http://localhost:8080/'
+SCHEMA: str = "rd3"
+TABLES: list[str] = ['Samples OGM', 'Experiments OGM']
 MAX_TEMPLATE_ROWS: int = 1000
-
 OUTPUT_FILE: str = environ.get('OUTPUT_FILE')
 
-client = Client(url=environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN'])
+client = Client(url=HOST, token=environ['MOLGENIS_TOKEN'])
 
 
 class WorkbookStyles(TypedDict):
@@ -67,9 +66,10 @@ class BuildTemplate:
         self.lookups = []
 
         if sys_output_filename:
-            output_basename = path.basename(sys_output_filename)
-            self.output_filename = sys_output_filename.replace(
-                output_basename, self.output_filename)
+            self.output_filename = sys_output_filename
+            # output_basename = path.basename(sys_output_filename)
+            # self.output_filename = sys_output_filename.replace(
+            #     output_basename, self.output_filename)
 
     def column_is_required(self, column: Column) -> bool:
         """Determine if a column is required based on schema metadata
@@ -186,7 +186,7 @@ class BuildTemplate:
         """Build template"""
         workbook = xlsxwriter.Workbook(filename=self.output_filename)
 
-        # set styles
+        # set workbook formats
         styles: WorkbookStyles = {
             'header_default': workbook.add_format({'border': 1}),
             'header_required': workbook.add_format({
@@ -201,6 +201,7 @@ class BuildTemplate:
         }
         styles['cell_required'].set_border_color('#cbcbcb')
 
+        # build sheets before lookups
         for table in self.tables:
             log.info('Building sheet for %s', table)
             table_meta = metadata.get_table(by='name', value=table)
@@ -250,13 +251,20 @@ class BuildTemplate:
 
 
 if __name__ == "__main__":
-    log.info("Building bulk upload template from %s", SCHEMA)
+    log.info("Staring template generator on schema %s", SCHEMA)
 
+    # retrieving metadata
+    log.info('Retrieving schema metadata for %s', SCHEMA)
     schema_meta = client.get_schema_metadata(name=SCHEMA)
+
+    # create new template generator and build
     template = BuildTemplate(
         schema=SCHEMA,
         tables=TABLES,
         max_template_rows=MAX_TEMPLATE_ROWS,
         sys_output_filename=OUTPUT_FILE
     )
+    log.info('Building template.....')
     template.build(metadata=schema_meta)
+
+    log.info('Saving file %s', template.output_filename)
