@@ -1,10 +1,10 @@
 """Build excel template from schema"""
 
-from os import environ
+from os import environ, path
 import sys
 import logging
-import xlsxwriter
 from typing import TypedDict
+import xlsxwriter
 from openpyxl.utils.cell import get_column_letter
 from molgenis_emx2_pyclient import Client
 from molgenis_emx2_pyclient.metadata import Schema, Table, Column
@@ -16,16 +16,17 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 log = logging.getLogger("Template Generator")
 
 # set params
-HOST: str = environ['MOLGENIS_HOST']
-TOKEN: str = environ['MOLGENIS_TOKEN']
-
 SCHEMA: str = "rd3"
 TABLES: list[str] = ['Samples OGM', 'Experiments OGM']
 
-MAX_TEMPLATE_ROWS: int = 250
+# SCHEMA: str = "pet store"
+# TABLES: list[str] = ['Pet', 'Order', 'Category']
 
+MAX_TEMPLATE_ROWS: int = 1000
 
-client = Client(url=HOST, token=TOKEN)
+OUTPUT_FILE: str = environ.get('OUTPUT_FILE')
+
+client = Client(url=environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN'])
 
 
 class WorkbookStyles(TypedDict):
@@ -39,7 +40,10 @@ class BuildTemplate:
     """Build template"""
 
     def __init__(self,
-                 schema: str, tables: list[str], max_template_rows: int = 250):
+                 schema: str,
+                 tables: list[str],
+                 max_template_rows: int = 250,
+                 sys_output_filename: str = None):
         """New template generator
 
         :param schema: name of the schema
@@ -61,6 +65,11 @@ class BuildTemplate:
         self.should_build_lookup_sheet = False
         self.lookups_col_index = 0
         self.lookups = []
+
+        if sys_output_filename:
+            output_basename = path.basename(sys_output_filename)
+            self.output_filename = sys_output_filename.replace(
+                output_basename, self.output_filename)
 
     def column_is_required(self, column: Column) -> bool:
         """Determine if a column is required based on schema metadata
@@ -149,10 +158,11 @@ class BuildTemplate:
 
                 lookups_col: str = get_column_letter(self.lookups_col_index+1)
                 lookup = {
-                    'header': ontology_table,
-                    'data': list(data),
+                    'name': ontology_table,
+                    'data': list(data)[:10],
                     'lookups_col': lookups_col,
                     'lookups_col_index': self.lookups_col_index,
+                    'template_sheet': sheet_name,
                     'template_col': get_column_letter(index+1),
                     'template_col_index': index,
                     'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)}"
@@ -168,14 +178,6 @@ class BuildTemplate:
                                     index,
                                     None,
                                     styles['cell_required'])
-            # apply validation
-            if should_build_ontology:
-                for row_index in range(1, self.max_template_rows):
-                    output_row_col: str = f"{lookup['template_col']}{row_index+1}"
-                    new_sheet.data_validation(
-                        output_row_col,
-                        {'validate': 'list', 'source': lookup['formula']}
-                    )
 
             index += 1
         new_sheet.autofit()
@@ -185,22 +187,19 @@ class BuildTemplate:
         workbook = xlsxwriter.Workbook(filename=self.output_filename)
 
         # set styles
-        header_default = workbook.add_format({'border': 1})
-        header_required = workbook.add_format({
-            'bottom': 1,
-            'bg_color': '#ADE1FF',
-            'bold': True
-        })
-
-        cell_required = workbook.add_format({
-            'border': 1,
-            'bg_color': '#cbcbcb'
-        })
-        cell_required.set_border_color('#cbcbcb')
-
-        styles: WorkbookStyles = {'header_default': header_default,
-                                  'header_required': header_required,
-                                  'cell_required': cell_required}
+        styles: WorkbookStyles = {
+            'header_default': workbook.add_format({'border': 1}),
+            'header_required': workbook.add_format({
+                'bottom': 1,
+                'bg_color': '#ADE1FF',
+                'bold': True
+            }),
+            'cell_required': workbook.add_format({
+                'border': 1,
+                'bg_color': '#cbcbcb'
+            })
+        }
+        styles['cell_required'].set_border_color('#cbcbcb')
 
         for table in self.tables:
             log.info('Building sheet for %s', table)
@@ -217,19 +216,33 @@ class BuildTemplate:
                              column_metadata=col_meta,
                              styles=styles)
 
+        # only build lookups if present in the model
         if self.should_build_lookup_sheet:
-            log.info('Creating lookup sheet')
             lookups_sheet = workbook.add_worksheet(name='lookups')
             for lookup in self.lookups:
+                log.info(
+                    'Creating lookup and apply validation rules for %s', lookup['name'])
                 lookups_sheet.write(
                     0,
                     lookup['lookups_col_index'],
-                    lookup['header'],
+                    lookup['name'],
                     styles['header_default'])
 
+                # write ontology terms
                 for index, row in enumerate(lookup['data']):
                     lookups_sheet.write(
-                        index+1, lookup['lookups_col_index'], row['name'])
+                        index+1, lookup['lookups_col_index'], f"'{row['name']}'")
+
+                # apply validation in the appropriate sheet
+                template_sheet = workbook.get_worksheet_by_name(
+                    lookup['template_sheet'])
+                if lookup['data']:
+                    for row_index in range(1, self.max_template_rows):
+                        template_sheet.data_validation(
+                            f"{lookup['template_col']}{row_index+1}",
+                            {'validate': 'list',
+                                'source': f"{lookup['formula']}"}
+                        )
 
             lookups_sheet.autofit()
             lookups_sheet.protect()
@@ -240,5 +253,10 @@ if __name__ == "__main__":
     log.info("Building bulk upload template from %s", SCHEMA)
 
     schema_meta = client.get_schema_metadata(name=SCHEMA)
-    template = BuildTemplate(SCHEMA, TABLES)
+    template = BuildTemplate(
+        schema=SCHEMA,
+        tables=TABLES,
+        max_template_rows=MAX_TEMPLATE_ROWS,
+        sys_output_filename=OUTPUT_FILE
+    )
     template.build(metadata=schema_meta)
