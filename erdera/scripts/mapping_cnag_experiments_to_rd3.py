@@ -2,12 +2,15 @@
 """
 import logging
 from os import environ
-import pandas as pd
-from molgenis_emx2_pyclient.client import Client
 import asyncio
 import zipfile
 from zipfile import ZipFile
+
+import pandas as pd
 from dotenv import load_dotenv
+
+from molgenis_emx2_pyclient.client import Client
+
 load_dotenv()
 
 logging.captureWarnings(True)

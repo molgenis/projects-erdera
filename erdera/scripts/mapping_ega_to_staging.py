@@ -5,14 +5,17 @@ This script logs into the EGA API and fetches the metadata belonging to an EGA d
 
 import os
 import logging
-import pandas as pd
-from dotenv import load_dotenv
-from molgenis_emx2_pyclient import Client
-from erdera.clients.egaClient import EGASubmissionsClient
 from os import environ
 from datetime import datetime
-load_dotenv()
 import time
+
+import pandas as pd
+from dotenv import load_dotenv
+
+from molgenis_emx2_pyclient import Client
+from erdera.clients.egaClient import EGASubmissionsClient
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logging.captureWarnings(True)

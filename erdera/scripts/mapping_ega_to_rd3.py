@@ -1,12 +1,15 @@
 """Map the EGA data from the staging area to RD3"""
 
+import re
+from os import environ
+import logging
+
 import pandas as pd
 from dotenv import load_dotenv
-from os import environ
-load_dotenv()
-import re
-import logging
+
 from molgenis_emx2_pyclient.client import Client
+
+load_dotenv()
 
 logging.captureWarnings(True)
 log = logging.getLogger("Staging Area Mapping")

@@ -5,8 +5,9 @@ according to an endpoint the user can specify.
 
 import logging
 import requests
-from dotenv import load_dotenv
 from os import environ
+
+from dotenv import load_dotenv
 
 load_dotenv()
 

@@ -1,12 +1,15 @@
 """Mapping GPAP participants data to RD3"""
 import logging
 from os import environ
-import pandas as pd
-from molgenis_emx2_pyclient.client import Client
-from dotenv import load_dotenv
 import ast
 import asyncio
+
+import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
+
+from molgenis_emx2_pyclient.client import Client
+
 load_dotenv()
 
 logging.captureWarnings(True)
