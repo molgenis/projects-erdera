@@ -1,6 +1,6 @@
 """Build excel template from schema"""
 
-from os import environ, path
+from os import environ
 import sys
 import logging
 from typing import TypedDict
@@ -15,15 +15,25 @@ logging.captureWarnings(True)
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 log = logging.getLogger("Template Generator")
 
-# set params
-# SCHEMA: str = "pet store"
-# TABLES: list[str] = ['Pet', 'Order', 'Category']
-HOST: str = environ['MOLGENIS_HOST'] if environ.get(
-    'MOLGENIS_HOST') else 'http://localhost:8080/'
-SCHEMA: str = "rd3"
-TABLES: list[str] = ['Samples OGM', 'Experiments OGM']
+# set defaults
 MAX_TEMPLATE_ROWS: int = 1000
 OUTPUT_FILE: str = environ.get('OUTPUT_FILE')
+HOST: str = 'http://localhost:8080/'
+if environ.get('MOLGENIS_HOST'):
+    HOST = environ['MOLGENIS_HOST']
+
+# init template builder params
+SCHEMA: str = None  # rd3
+TABLES: list[str] = []  # ['Samples OGM','Experiments OGM']
+
+# process args: must send as a string separated with a ";"
+if len(sys.argv) >= 2:
+    print("args", sys.argv[1])
+    args = sys.argv[1].split(";")
+    SCHEMA = args[0].replace('\"', '')
+    TABLES = args[1].split(",")
+    log.info('Received args: schema=%s, tables=%s', SCHEMA, TABLES)
+
 
 client = Client(url=HOST, token=environ['MOLGENIS_TOKEN'])
 
@@ -252,6 +262,7 @@ class BuildTemplate:
 
 if __name__ == "__main__":
     log.info("Staring template generator on schema %s", SCHEMA)
+    log.info('Sheets to create based on tables %s', TABLES)
 
     # retrieving metadata
     log.info('Retrieving schema metadata for %s', SCHEMA)
