@@ -235,6 +235,12 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
         consanguinity_dict)
 
     # upload
+    # first delete content of clinical observations
+    client.truncate(table='Phenotype observations', schema= 'erdera')
+    client.truncate(table='Disease history', schema= 'erdera')
+    client.truncate(table='Clinical observations', schema='erdera')    
+    
+    # then upload
     client.save_schema(table='Clinical observations',
                        data=clinical_observations)
 
@@ -256,8 +262,81 @@ def build_import_consent(client, data: pd.DataFrame):
         consent_dict)
 
     # upload the data
+    # first truncate the consent table
+    client.truncate(table='Individual consent', schema='erdera')
+    # then upload
     client.save_schema(table='Individual consent', data=indv_consent)
 
+def match_phenotypes(gpap_data: set):
+    """Match phenotypes"""
+    molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+    # get the RD3 ontology
+    rd3_phenotypes = molgenis.get(
+        table='Phenotypes', schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'], as_df=True)
+
+    # create a set of the rd3 names and codes
+    rd3_data = set(zip(rd3_phenotypes['name'], rd3_phenotypes['code']))
+    # get the GPAP phenotypes that do not have a name and code match in RD3 
+    non_matches = gpap_data - rd3_data
+
+    # check for which gpap cases quality control has taken place
+    molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+    # get the phenotypes quality control information
+    phenotypes = molgenis.get(table='Phenotypes', as_df=True)
+    phenotypes_new_value = phenotypes[~phenotypes['correct phenotype'].isna()] # get the rows that have a correction
+
+    ## case 1: there is a _correct phenotype_ entry, meaning the GPAP entry should be this phenotype
+    # create a dictionary of the GPAP name and code with the new value (the correct phenotype)
+    mapping = phenotypes_new_value.set_index(['GPAP name', 'GPAP code'])['correct phenotype'].to_dict()
+
+    ## case 2: the _is correct_ boolean is set to True, meaning the RD3 variant of the GPAP phenotype is correct
+    phenotypes_is_correct = phenotypes[phenotypes['is correct']]
+    # for these cases, the RD3 name is the correct one
+    mapping.update(phenotypes_is_correct.set_index(['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
+
+
+    # create df of the non-matches for the quality control schema
+    df_mismatch_obs = pd.DataFrame(list(non_matches), columns=['name', 'code'])
+    # create a df of the rd3 names and codes
+    rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
+    # create a df of the non-matches merged with the rd3 names 
+    df_mismatch_names = pd.merge(df_mismatch_obs, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
+    df_mismatch_codes = pd.merge(df_mismatch_obs, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
+    
+    df_mismatch_names = df_mismatch_names.rename(columns= { # rename columns to correspond to schema
+        'name_x': 'GPAP name',
+        'code': 'GPAP code',
+        'name_y': 'RD3 name'
+    })
+    df_mismatch_names['RD3 code'] = df_mismatch_names['GPAP code'] # the codes are identical between GPAP and RD3
+    df_mismatch_names['type of mismatch'] = 'name' # the type of mismatch is on the name 
+
+    df_mismatch_codes = df_mismatch_codes.rename(columns= { # rename columns to correspond to schema
+        'name': 'GPAP name',
+        'code_x': 'GPAP code',
+        'code_y': 'RD3 code'
+    })
+    df_mismatch_codes['RD3 name'] = df_mismatch_codes['GPAP name'] # the names are identical between GPAP and RD3
+    df_mismatch_codes['type of mismatch'] = 'code' # the type of mismatch is on the code
+
+    # upload the non-matches minus the mappings (for the mappings there is a correction)
+    quality_control_upload = pd.concat([df_mismatch_codes, df_mismatch_names])
+    quality_control_upload = quality_control_upload[~quality_control_upload[['GPAP name', 'GPAP code']] \
+    .apply(tuple, axis=1).isin(set(mapping))]
+
+    # upload the mismatched phenotypes
+    molgenis.save_schema(data=quality_control_upload, table='Phenotypes')
+
+    return non_matches, mapping
+   
 async def match_ontologies(ontology: str, gpap_data: dict, gpap_field_name: str, mappings_name: str):
     """
     ontology = name of the ontology in RD3
@@ -436,6 +515,41 @@ def build_import_disease_history(client, data: pd.DataFrame):
     client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
     client.save_schema(table='Clinical observations', data=clinical_obs)
 
+def parse_observations(obs):
+    """
+    Parse the GPAP observations (features) and convert to a list.
+    Works for the following cases:
+    - empty values (None, NaN) → []
+    - string representation of a list → []
+    - list → []
+    """
+    # None of np.nan check
+    if obs is None or (isinstance(obs, float) and np.isnan(obs)):
+        return []
+
+    # if the observation is a string
+    if isinstance(obs, str):
+        try:
+            parsed = ast.literal_eval(obs)
+            if isinstance(parsed, list):
+                return parsed
+            else:
+                return []
+        except Exception:
+            return []
+
+    # Numpy array → Python list
+    if isinstance(obs, np.ndarray):
+        return obs.tolist()
+
+    # if it is already a list, return the original observation
+    if isinstance(obs, list):
+        return obs
+    
+    # in all other cases,  return list 
+    return []
+
+
 def build_import_phenotype_observations(client, data: pd.DataFrame):
     """Map staging area data to phenotype observations data"""
     phen_observations = data[['features', 'report_id']]\
@@ -449,57 +563,64 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
                               as_df=True)
 
     pheno_observations2 = []
-    obs_dict = {}
+    observations = set()
     for index, pheno_obs in phen_observations.iterrows():
         # get the automatically generated id for this individual
         id = clinical_obs.loc[clinical_obs['individuals']
                               == pheno_obs['report_id'], 'id'].squeeze()
+        # check if the individual has a clinical observations ID - otherwise the individual is present in the 
+        # GPAP staging area data but not in RD3
+        if len(id) == 0:
+            logging.warning(f'Individual {pheno_obs['report_id']} does not have a clinical observation ID. The \
+    individual is not included in the Phenotype Observations.')
+            continue
         # get all observations of this individual
         observations_all = pheno_obs.get('type')
-        if isinstance(observations_all, str):
-            observations_all = ast.literal_eval(observations_all)
-        if isinstance(observations_all, (list)):
-            if len(observations_all) != 0:
-                for observation in observations_all:
-                    if observation.get('name') is not None:
-                        new_entry = {}
-                        new_entry['part of clinical observation'] = id
-                        new_entry['type'] = observation.get('name')
-                        # observed (GPAP) and excluded (RD3) have opposite meanings, so negate boolean
-                        new_entry['excluded'] = not observation.get('observed')
-                        new_entry['phenotype code'] = observation.get('id')
-                        pheno_observations2.append(new_entry)
-                        # save the phenotype names with code as prevalent in GPAP
-                        obs_dict[(observation.get('name'),observation.get('id'))] = observation.get('id')
-                        # obs_dict[observation.get('name')] = observation.get(
-                        #     'id')  # only get code (without HP:)
+        # make sure the observations are of type list 
+        observations_all = parse_observations(observations_all)
 
+        # loop through the phenotypic observations of the individual
+        for observation in observations_all:
+            if observation.get('name') is not None:
+                new_entry = {}
+                new_entry['part of clinical observation'] = id
+                new_entry['type'] = observation.get('name')
+                # observed (GPAP) and excluded (RD3) have opposite meanings, so negate boolean
+                new_entry['excluded'] = not observation.get('observed')
+                new_entry['phenotype code'] = observation.get('id')
+                pheno_observations2.append(new_entry)
+                # save the phenotype names with code as prevalent in GPAP
+                observations.add((observation.get('name'), observation.get('id')))
 
     # convert phenotypic observations list to df
     phen_observations = pd.DataFrame(pheno_observations2)
 
     # map the phenotypic features from GPAP format to RD3
-    phen_dict, unmatched = asyncio.run(match_ontologies('Phenotypes', obs_dict, 'features', 'Phenotypes'))
-    # phen_observations['type'] = phen_observations['type'].replace(phen_dict)
-    phen_observations['type'] = phen_observations.apply(lambda row: phen_dict.get((row['type'], row['phenotype code']), row['type']), axis=1)
+    non_matches, mappings = match_phenotypes(observations)
 
-    # get the unmatched phenotypes (the phenotypes from GPAP not present in RD3)
-    # only get the name without the HP code
-    unmatched_names = [entry['incoming value'] for entry in unmatched]
-  
-    mask = ~phen_observations.apply(lambda row: (row['type'], row['phenotype code']) in unmatched_names, axis=1)
-    phen_observations = phen_observations[mask]
+    phen_observations['key'] = list(zip(phen_observations['type'], phen_observations['phenotype code']))
 
-    phen_observations = phen_observations.drop(columns=['phenotype code'])
+    # map the corrections
+    phen_observations.loc[phen_observations['key'].isin(mappings), 'type'] = phen_observations['key'].map(mappings)
+    # remove the non-matches
+    # first remake the key so the corrections are incorporated 
+    phen_observations['key'] = list(zip(phen_observations['type'], phen_observations['phenotype code']))
+    phen_observations = phen_observations[~phen_observations['key'].isin(non_matches)]
     
     # there are (at least) two cases where the excluded value is both true and false for an individual
     # this is not possible since it would mean that a phenotypic feature is both observed and not-observed
     # print and log this and remove from the df 
     data_entry_errors = phen_observations.groupby(['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
-    phen_observations = phen_observations[~data_entry_errors]
 
-    logging.warning(f"Error! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
-    the excluded field is both true and false for a phenotypic feature - removing the rows")
+    if not phen_observations[data_entry_errors].empty:
+        logging.warning(f"Error! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
+        the excluded field is both true and false for the following phenotypic feature(s): \
+        {phen_observations[data_entry_errors]['type'].unique().tolist()} - removing the row(s)")
+
+        phen_observations = phen_observations[~data_entry_errors]
+
+    # drop unneccessary columns
+    phen_observations = phen_observations.drop(columns=['phenotype code', 'key'])
 
     # upload
     client.save_schema(table='Phenotype observations',
