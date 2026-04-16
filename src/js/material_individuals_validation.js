@@ -22,13 +22,21 @@
  * validateIndividuals('Files', [{...}, {...}]) // returns true
  * ```
  */
-export default function validateIndividuals(tableclass, individuals) {
-  const samplesTablePattern = /(.Samples+)/;
-  const hasMoreThanOne = individuals && individuals.length > 1;
+export default function validateIndividuals(tableclass, records) {
+  const samplesTables = [
+    "Samples RNA",
+    "Samples OGM",
+    "Samples srDNA",
+    "Samples lrGS",
+  ];
+  const hasMoreThanOne = records && records.length > 1;
 
   if (tableclass.endsWith(".Individual consent") && hasMoreThanOne) {
     return "Consent can only be linked to one individual";
-  } else if (samplesTablePattern.test(samplesTablePattern) && hasMoreThanOne) {
+  } else if (
+    samplesTables.includes(tableclass.split(".")[1]) &&
+    hasMoreThanOne
+  ) {
     return "Samples can only be linked to one individual";
   } else {
     return true;

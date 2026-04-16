@@ -8,7 +8,22 @@ describe("Individuals in materials", () => {
   test("Samples are not linked to more than one individual", () => {
     expect(validateIndividuals("RD3.Samples RNA", singleRecord)).toBeTruthy();
     expect(validateIndividuals("RD3.Samples RNA", multipleRecords)).toContain(
-      "Samples can only be linked to one individual"
+      "Samples can only"
+    );
+
+    expect(validateIndividuals("RD3.Samples OGM", singleRecord)).toBeTruthy();
+    expect(validateIndividuals("RD3.Samples OGM", multipleRecords)).toContain(
+      "Samples can only"
+    );
+
+    expect(validateIndividuals("RD3.Samples srDNA", singleRecord)).toBeTruthy();
+    expect(validateIndividuals("RD3.Samples srDNA", multipleRecords)).toContain(
+      "Samples can only"
+    );
+
+    expect(validateIndividuals("RD3.Samples lrGS", singleRecord)).toBeTruthy();
+    expect(validateIndividuals("RD3.Samples lrGS", multipleRecords)).toContain(
+      "Samples can only"
     );
   });
 
@@ -22,10 +37,12 @@ describe("Individuals in materials", () => {
   });
 
   test("Other tables can accept multiple links", () => {
-    expect(validateIndividuals(".Files", singleRecord)).toBeTruthy();
-    expect(validateIndividuals(".Files", multipleRecords)).toBeTruthy();
+    expect(validateIndividuals("RD3.Files", singleRecord)).toBeTruthy();
+    expect(validateIndividuals("RD3.Files", multipleRecords)).toBeTruthy();
 
-    expect(validateIndividuals(".Experiments", singleRecord)).toBeTruthy();
-    expect(validateIndividuals(".Experiments", multipleRecords)).toBeTruthy();
+    expect(validateIndividuals("RD3.Experiments", singleRecord)).toBeTruthy();
+    expect(
+      validateIndividuals("RD3.Experiments", multipleRecords)
+    ).toBeTruthy();
   });
 });
