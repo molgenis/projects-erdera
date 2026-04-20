@@ -267,6 +267,46 @@ def build_import_consent(client, data: pd.DataFrame):
     # then upload
     client.save_schema(table='Individual consent', data=indv_consent)
 
+def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict):
+    """Upload the observations that have a mismatch between the name and/or code. """
+    # create df of the non-matches for the quality control schema
+    df_mismatch_obs = pd.DataFrame(list(non_matches), columns=['name', 'code'])
+    # create a df of the rd3 names and codes
+    rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
+    # create a df of the non-matches merged with the rd3 names 
+    df_mismatch_names = pd.merge(df_mismatch_obs, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
+    df_mismatch_codes = pd.merge(df_mismatch_obs, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
+    
+    df_mismatch_names = df_mismatch_names.rename(columns= { # rename columns to correspond to schema
+        'name_x': 'GPAP name',
+        'code': 'GPAP code',
+        'name_y': 'RD3 name'
+    })
+    df_mismatch_names['RD3 code'] = df_mismatch_names['GPAP code'] # the codes are identical between GPAP and RD3
+    df_mismatch_names['type of mismatch'] = 'name' # the type of mismatch is on the name 
+
+    df_mismatch_codes = df_mismatch_codes.rename(columns= { # rename columns to correspond to schema
+        'name': 'GPAP name',
+        'code_x': 'GPAP code',
+        'code_y': 'RD3 code'
+    })
+    df_mismatch_codes['RD3 name'] = df_mismatch_codes['GPAP name'] # the names are identical between GPAP and RD3
+    df_mismatch_codes['type of mismatch'] = 'code' # the type of mismatch is on the code
+
+    # upload the non-matches minus the mappings (for the mappings there is a correction)
+    quality_control_upload = pd.concat([df_mismatch_codes, df_mismatch_names])
+    quality_control_upload = quality_control_upload[~quality_control_upload[['GPAP name', 'GPAP code']] \
+    .apply(tuple, axis=1).isin(set(mapping))]
+
+    molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+
+    # upload the mismatched phenotypes
+    molgenis.save_schema(data=quality_control_upload, table='Phenotypes')
+
 def match_phenotypes(gpap_data: set):
     """Match phenotypes"""
     molgenis = Client(
@@ -302,41 +342,36 @@ def match_phenotypes(gpap_data: set):
     # for these cases, the RD3 name is the correct one
     mapping.update(phenotypes_is_correct.set_index(['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
 
-
-    # create df of the non-matches for the quality control schema
-    df_mismatch_obs = pd.DataFrame(list(non_matches), columns=['name', 'code'])
-    # create a df of the rd3 names and codes
-    rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
-    # create a df of the non-matches merged with the rd3 names 
-    df_mismatch_names = pd.merge(df_mismatch_obs, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
-    df_mismatch_codes = pd.merge(df_mismatch_obs, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
-    
-    df_mismatch_names = df_mismatch_names.rename(columns= { # rename columns to correspond to schema
-        'name_x': 'GPAP name',
-        'code': 'GPAP code',
-        'name_y': 'RD3 name'
-    })
-    df_mismatch_names['RD3 code'] = df_mismatch_names['GPAP code'] # the codes are identical between GPAP and RD3
-    df_mismatch_names['type of mismatch'] = 'name' # the type of mismatch is on the name 
-
-    df_mismatch_codes = df_mismatch_codes.rename(columns= { # rename columns to correspond to schema
-        'name': 'GPAP name',
-        'code_x': 'GPAP code',
-        'code_y': 'RD3 code'
-    })
-    df_mismatch_codes['RD3 name'] = df_mismatch_codes['GPAP name'] # the names are identical between GPAP and RD3
-    df_mismatch_codes['type of mismatch'] = 'code' # the type of mismatch is on the code
-
-    # upload the non-matches minus the mappings (for the mappings there is a correction)
-    quality_control_upload = pd.concat([df_mismatch_codes, df_mismatch_names])
-    quality_control_upload = quality_control_upload[~quality_control_upload[['GPAP name', 'GPAP code']] \
-    .apply(tuple, axis=1).isin(set(mapping))]
-
-    # upload the mismatched phenotypes
-    molgenis.save_schema(data=quality_control_upload, table='Phenotypes')
+    # upload the mismatches
+    upload_non_matches(rd3_data=rd3_data, non_matches=non_matches, mapping=mapping)
+    # upload the cases where there is no RD3 data
+    check_no_match(rd3_data=rd3_data, non_matches = non_matches)
 
     return non_matches, mapping
-   
+
+def check_no_match(rd3_data: set, non_matches: set):
+    """Check if there is no RD3 match for the data entry"""
+    missing_codes = set([i[1] for i in non_matches]) - set([i[1] for i in rd3_data])
+
+    # create a dictionary of the non-matches with the codes as keys
+    non_matches_dict = {y: x for x,y in non_matches}
+
+    # create a df of the missing phenotypes (missing in RD3)
+    missing_df = pd.DataFrame({
+        'source': 'phenostore_service/api/participants_by_exp/features',
+        'incoming value': non_matches_dict.get(code),
+        'incoming code': code
+    }
+    for code in missing_codes)
+
+    molgenis = Client(
+        environ['MOLGENIS_HOST'],
+        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
+        token=environ['MOLGENIS_TOKEN']
+    )
+
+    molgenis.save_schema(data=missing_df, table='Phenotypes')
+
 async def match_ontologies(ontology: str, gpap_data: dict, gpap_field_name: str, mappings_name: str):
     """
     ontology = name of the ontology in RD3
