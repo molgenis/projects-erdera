@@ -13,7 +13,7 @@ describe("year of birth", () => {
     expect(validateYearOfBirth(1800)).toContain("Year of birth");
     expect(validateYearOfBirth(180)).toContain("Year of birth");
   });
-  
+
   test("year is valid", () => {
     expect(validateYearOfBirth(currentYear - 1)).toBeTruthy();
   });
