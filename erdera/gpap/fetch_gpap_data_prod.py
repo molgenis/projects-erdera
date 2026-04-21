@@ -112,7 +112,7 @@ def prepare_run_metadata() -> types.JobsGpapApi:
 if __name__ == "__main__":
 
     # load api fields
-    with open('ERDERA/scripts/clients/gpap_prod_api_fields.json', mode='r', encoding='utf-8') as file:
+    with open('erdera/clients/gpap/gpap_prod_api_fields.json', mode='r', encoding='utf-8') as file:
         fields = json.load(file)
         file.close()
 

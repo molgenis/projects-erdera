@@ -1,0 +1,10 @@
+tableName,tableExtends,tableType,columnName,formLabel,columnType,key,required,readonly,refSchema,refTable,refLink,refBack,refLabel,defaultValue,validation,visible,computed,semantics,profiles,label,description
+Mismatches,,,GPAP name,,,1,TRUE,,,,,,,,,,,,,,
+Mismatches,,,GPAP code,,,1,TRUE,,,,,,,,,,,,,,
+Mismatches,,,RD3 name,,,1,TRUE,,,,,,,,,,,,,,
+Mismatches,,,RD3 code,,,1,TRUE,,,,,,,,,,,,,,
+Mismatches,,,is correct,,bool,,,,,,,,,FALSE,,,,,,,
+Mismatches,,,type of mismatch,,ontology,,,,,Type of mismatch,,,,,,,,,,,
+Phenotypes,Mismatches,,,,,,,,,,,,,,,,,,,,The mismatches between the GPAP and RD3 phenotypes
+Phenotypes,,,correct phenotype,,ontology,,,,CatalogueOntologies,Phenotypes,,,,,,isCorrect === false,,,,,
+Mismatches,,,comment,,text,,,,,,,,,,,,,,,,
