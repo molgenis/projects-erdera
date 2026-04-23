@@ -207,7 +207,7 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
 
     # combine project and subproject from GPAP to included in resources in RD3
     # TODO: add solve-rd as a resource and link the experiments to this resource
-    ngs_sequencing.loc[ngs_sequencing['project'].isin(['LatinSeq ERDERA', 'Solve-RD ERDERA']), 'project'] = 'ERDERA' # rename project LatinSeq ERDERA to ERDERA
+    ngs_sequencing.loc[ngs_sequencing['project'].isin(['LatinSeq ERDERA', 'Solve-RD ERDERA', 'RD-Connect ERDERA']), 'project'] = 'ERDERA' # rename project LatinSeq ERDERA to ERDERA
     # tmp remove subproject for now based on GPAP's comment
     ngs_sequencing['subproject'] = None
     ngs_sequencing['included in resources'] = ngs_sequencing[['project', 'subproject']].apply(
