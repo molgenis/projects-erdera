@@ -101,8 +101,8 @@ if __name__ == "__main__":
     # fetching the information from the datasets endpoint
     logging.info('Fetching data from datasets')
     response = client.get_endpoint_dataset(provisional_id=provisional_id, include_headers=False)
-    dataset2 = pd.DataFrame([response.get('data')])
-    dataset['added by job'] = api_run_meta['id']   
+    dataset = pd.DataFrame([response.get('data')])
+    dataset['added by job'] = api_run_meta['id']
     ega_output_data['dataset'] = dataset
     if response.get('errors'):
         api_run_errors.extend(response.errors)
