@@ -91,7 +91,7 @@ class BuildTemplate:
         """
         is_key = column.key > 0 if column.get('key') else False
         is_req = column.get('required')
-        return is_key and is_req
+        return is_key or is_req
 
     def write_sheet_header(self,
                            sheet,
@@ -242,7 +242,7 @@ class BuildTemplate:
                 # write ontology terms
                 for index, row in enumerate(lookup['data']):
                     lookups_sheet.write(
-                        index+1, lookup['lookups_col_index'], f"'{row['name']}'")
+                        index+1, lookup['lookups_col_index'], f"{row['name']}")
 
                 # apply validation in the appropriate sheet
                 template_sheet = workbook.get_worksheet_by_name(
