@@ -91,6 +91,9 @@ class BuildTemplate:
         """
         is_key = column.key > 0 if column.get('key') else False
         is_req = column.get('required')
+        if column.get('columnType') == 'AUTO_ID' and is_req:
+            is_key = False
+            is_req = False
         return is_key or is_req
 
     def write_sheet_header(self,
@@ -162,14 +165,30 @@ class BuildTemplate:
                 if bool(column.get('refSchemaId')):
                     ontology_schema = column.refSchemaId
 
-                data = client.get(table=ontology_table,
-                                  columns=['name'],
-                                  schema=ontology_schema)
+                query_filter: str = ''
+                if ontology_table in [
+                    'Concentration measurement type',
+                    'File formats',
+                    'Movietime',
+                    'Sample type',
+                    'Sequencing instrument models',
+                    'Sequencing methods',
+                    'Storage buffer',
+                    'Storage conditions',
+                    'Tissue type'
+                ]:
+                    query_filter = 'tags=="erdera"'
+
+                data = client.get(
+                    table=ontology_table,
+                    columns=['name'],
+                    query_filter=query_filter,
+                    schema=ontology_schema)
 
                 lookups_col: str = get_column_letter(self.lookups_col_index+1)
                 lookup = {
                     'name': ontology_table,
-                    'data': list(data)[:10],
+                    'data': list(data),
                     'lookups_col': lookups_col,
                     'lookups_col_index': self.lookups_col_index,
                     'template_sheet': sheet_name,
