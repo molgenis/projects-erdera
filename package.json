@@ -17,6 +17,15 @@
         "docs:lint": "yarn markdownlint --fix docs/*",
         "docs": "yarn docs:build && yarn docs:lint",
         "lint": "prettier src tests --write --config .prettierrc.json",
-        "pip:freeze": "git rm requirements.txt && pip freeze >> requirements.txt"
+        "pip:freeze": "git rm requirements.txt && pip freeze >> requirements.txt",
+        "template:samples-lrGS": "python erdera/jobs/template_generator/index.py 'erdera;Samples lrGS'",
+        "template:samples-ogm": "python erdera/jobs/template_generator/index.py 'erdera;Samples OGM'",
+        "template:samples-rna": "python erdera/jobs/template_generator/index.py 'erdera;Samples RNA'",
+        "template:experiments-lrGS": "python erdera/jobs/template_generator/index.py 'erdera;Experiments lrGS'",
+        "template:experiments-ogm": "python erdera/jobs/template_generator/index.py 'erdera;Experiments OGM'",
+        "template:experiments-rna": "python erdera/jobs/template_generator/index.py 'erdera;Experiments RNA'",
+        "template:samples":"yarn run template:samples-lrGS && yarn run template:samples-ogm && yarn run template:samples-rna",
+        "template:experiments":"yarn run template:experiments-lrGS && yarn run template:experiments-ogm && yarn run template:experiments-rna",
+        "template:all": "yarn run template:samples && yarn run template:experiments"
     }
 }
