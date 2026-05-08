@@ -20,11 +20,13 @@ If you would like to run the script locally, run the following command with the 
 - `schema`: The name of the schema (string)
 - `tables`: the name of the tables that you want to have in the template (a comma-separated string)
 
+Both arguments need to be collapsed into the same string and separated by a column: `<schema>;<tables>`. If you would like to name multiple tables, then separated the table names with a comma `table1,table2,table3,...`
+
 For example:
 
 ```python
 # source venv/bin/activate
-python erdera/jobs/template_generator/index.py "mydatabase;Samples RNA,Experiments RNA,Files"
+python erdera/jobs/template_generator/index.py "erdera;Samples RNA,Experiments RNA,Files"
 ```
 
 > [!NOTE]
