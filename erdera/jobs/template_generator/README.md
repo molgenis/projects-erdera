@@ -15,21 +15,22 @@ By default, the script uses the localhost which is the same if you have a local 
 
 ## Running locally
 
-If you would like to test the script or further develop it, comment out the block that handles the `sys.argv`
+If you would like to run the script locally, run the following command with the following arguments
+
+- `schema`: The name of the schema (string)
+- `tables`: the name of the tables that you want to have in the template (a comma-separated string)
+
+Both arguments need to be collapsed into the same string and separated by a column: `<schema>;<tables>`. If you would like to name multiple tables, then separated the table names with a comma `table1,table2,table3,...`
+
+For example:
 
 ```python
-# process args: must send as a string separated with a ";"
-# if len(sys.argv) >= 2:
-#    ....
+# source venv/bin/activate
+python erdera/jobs/template_generator/index.py "erdera;Samples RNA,Experiments RNA,Files"
 ```
 
-Then manually define a schema and tables.
-
-```python
-# init template builder params
-SCHEMA: str = "my schema"
-TABLES: list[str] = ['Table 1', 'Table 2',]
-```
+> [!NOTE]
+> For ERDERA, we are generating one template per table (e.g., Samples.xlsx, Experiments.xlsx) as there's no way to link records until an auto-ID is generated.
 
 ## Deploying the script
 

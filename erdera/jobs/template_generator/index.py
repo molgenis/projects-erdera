@@ -24,7 +24,7 @@ if environ.get('MOLGENIS_HOST'):
 
 # init template builder params
 SCHEMA: str = None  # rd3
-TABLES: list[str] = []  # ['Samples OGM','Experiments OGM']
+TABLES: list[str] = []
 
 # process args: must send as a string separated with a ";"
 if len(sys.argv) >= 2:
@@ -32,6 +32,7 @@ if len(sys.argv) >= 2:
     args = sys.argv[1].split(";")
     SCHEMA = args[0].replace('\"', '')
     TABLES = args[1].split(",")
+    OUTPUT_FILE = f'{TABLES[0]}.xlsx'
     log.info('Received args: schema=%s, tables=%s', SCHEMA, TABLES)
 
 
