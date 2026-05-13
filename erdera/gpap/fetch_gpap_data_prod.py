@@ -196,7 +196,7 @@ if __name__ == "__main__":
     # import datasets into staging area
     log.info("Importing data into the staging area")
     with Client(url=os.getenv('EMX2_HOST'),
-                schema=os.getenv('EMX2_HOST_SCHEMA'),
+                schema=os.getenv('JOBS_SCHEMA'),
                 token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
 
         molgenis.save_schema(table='Jobs Gpap Api', data=api_run_meta_df)
@@ -204,6 +204,10 @@ if __name__ == "__main__":
         if api_run_errors:
             molgenis.save_schema(
                 table='Job errors', data=api_run_errors)
+            
+    with Client(url=os.getenv('EMX2_HOST'),
+                schema= os.getenv('EMX2_HOST_SCHEMA_GPAP'),
+                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
 
         molgenis.save_schema(table="Participants", data=participants_df)
         molgenis.save_schema(table="Experiments", data=experiments_df)
