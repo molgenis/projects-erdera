@@ -19,7 +19,7 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_experiments():
     """Retrieve metadata from /<staging area>/Experiments"""
     logging.info('Retrieving required metadata')
-    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
+    with Client(environ['MOLGENIS_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
         return client_ind.get(
             table='Experiments',
             schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
@@ -99,7 +99,7 @@ def get_data(rd3_name: str):
     '''Get the mappings data'''
     mappings_name = get_mappings_name(rd3_name)[0]
    
-    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
+    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
         return client_ind.get(
             table=mappings_name,
             schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
@@ -124,9 +124,9 @@ def match_ontology(gpap_data: list):
     unmatched_df['source'] = f'datamanagement_service/api/experimentsview/{get_mappings_name(gpap_data.name)[1]}'
 
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     # upload the values without a match to the ontology mappings schema
@@ -137,9 +137,9 @@ def match_ontology(gpap_data: list):
 def map_owner_to_organisation(owners: list):
     """Upload the GPAP owners as organisations in CatalogueOntologies"""
     ontologies_client = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     organisations = ontologies_client.get(
@@ -155,14 +155,37 @@ def map_owner_to_organisation(owners: list):
     # upload the new organisations 
     ontologies_client.save_schema(table='Organisations', 
                                   data=new_organisations_df)
+    
+def build_import_samples(client: Client, data: pd.DataFrame):
+    """Build and import the sample metadata based on GPAP's experiments. """
+
+    samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID']]\
+    .rename(columns={
+        'Sample_ID': 'sample',
+        'tissue': 'tissue type',
+        'Participant_ID': 'individuals'
+    })
+
+    ## map tissue type
+    field_name = 'tissue type'
+    matches, unmatched = match_ontology(gpap_data=samples_srDNA[field_name])
+    samples_srDNA[field_name] = samples_srDNA[field_name].replace(matches)
+
+    tmp = samples_srDNA.loc[samples_srDNA[field_name].isin(
+        unmatched)].index  # get the indices of the rows to remove (no match)
+    # remove rows without a RD3 ontology term equivalent
+    samples_srDNA = samples_srDNA.drop(tmp, axis=0)
+
+    # upload - does not work, more fields are required
+    #client.save_schema(table = 'Samples srDNA', data=samples_srDNA)
 
 def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     """This function maps GPAP experiments to NGS sequencing in RD3"""
     ngs_sequencing = data[['ExperimentID', 'LocalExperimentID', 
                            'kit', 
                            'Owner', 
-                            'erns', 
-                            'tissue', 'project', 'subproject', 
+                           'erns', 
+                           'project', 'subproject', 
                            'Participant_ID',
                            'library_strategy', 
                            'Sample_ID', 'library_source']]\
@@ -170,33 +193,11 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
         'ExperimentID':'id',
         'LocalExperimentID': 'alternate ids',
         'kit': 'target enrichment kit',
-        'tissue': 'tissue type',
         'Participant_ID': 'individuals',
-        'Sample_ID': 'sample id',
+        'Sample_ID': 'sample',
         'library_strategy': 'library strategy',
         'library_source': 'library source'
         })
-
-    ## map tissue type
-    field_name = 'tissue type'
-    matches, unmatched = match_ontology(gpap_data=ngs_sequencing[field_name])
-    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
-
-    tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
-        unmatched)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology term equivalent
-    ngs_sequencing = ngs_sequencing.drop(tmp, axis=0)
-
-    ## map target enrichment kit
-    field_name = 'target enrichment kit'
-    matches, unmatched = match_ontology(gpap_data=ngs_sequencing[field_name])
-
-    ngs_sequencing[field_name] = ngs_sequencing[field_name].replace(matches)
-
-    tmp = ngs_sequencing.loc[ngs_sequencing[field_name].isin(
-        unmatched)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology equivalent
-    ngs_sequencing = ngs_sequencing.drop(columns=[field_name])
 
     ## map (sub)projects # TODO: this needs to be improved, is only necessary at initialization 
     # get the resources
@@ -259,22 +260,23 @@ def build_import_NGS_sequencing(client: Client, data: pd.DataFrame):
     # remove erns and owner columns
     ngs_sequencing = ngs_sequencing.drop(columns=['erns', 'Owner']) 
 
-    # to do: discuss kits 
-    ngs_sequencing['target enrichment kit'] = None
-
-    client.save_schema(table = 'NGS sequencing', data=ngs_sequencing)
-
+    # local experiment id
+    ngs_sequencing['local experiment id'] = ngs_sequencing['id']
+     
 if __name__ == "__main__":
 
     experiments = get_staging_area_experiments()
 
     db = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
+
+    # map the samples 
+    build_import_samples(db, experiments)
 
     # Map the experiments to NGS sequencing
     build_import_NGS_sequencing(db, experiments)
