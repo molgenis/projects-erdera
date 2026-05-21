@@ -24,7 +24,6 @@ if environ.get('MOLGENIS_HOST'):
 
 # init template builder params
 SCHEMA: str = None  # rd3
-SCHEMA = 'RD3_test'
 TABLES: list[str] = []
 
 # process args: must send as a string separated with a ";"
