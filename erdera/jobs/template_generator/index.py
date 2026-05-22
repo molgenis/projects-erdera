@@ -176,9 +176,15 @@ class BuildTemplate:
                     'Sequencing methods',
                     'Storage buffer',
                     'Storage conditions',
-                    'Tissue type'
+                    'Tissue type',
+                    'Library source', 
+                    'Sequencing platforms',
+                    'Units',
+                    'Concentration measurement type',
+                    'Library layout'
                 ]:
-                    query_filter = 'tags=="erdera"'
+                    # query_filter = 'tags=="erdera"'
+                    query_filter = f"tags=='{sheet_name.split(' ')[1]}'"
 
                 data = client.get(
                     table=ontology_table,
@@ -195,7 +201,7 @@ class BuildTemplate:
                     'template_sheet': sheet_name,
                     'template_col': get_column_letter(index+1),
                     'template_col_index': index,
-                    'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)}"
+                    'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)+1}"
                 }
                 # print(lookup)
                 self.lookups.append(lookup)
@@ -239,7 +245,7 @@ class BuildTemplate:
             excluded_types = ['SECTION', 'HEADING']
             col_meta = [
                 col for col in table_meta.columns
-                if col.columnType not in excluded_types and not col.name.startswith('mg_')
+                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible') 
             ]
 
             self.build_sheet(workbook=workbook,
