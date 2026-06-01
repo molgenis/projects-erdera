@@ -26,6 +26,6 @@
         "template:experiments-rna": "python erdera/jobs/template_generator/index.py 'erdera;Experiments RNA'",
         "template:samples":"yarn run template:samples-lrGS && yarn run template:samples-ogm && yarn run template:samples-rna",
         "template:experiments":"yarn run template:experiments-lrGS && yarn run template:experiments-ogm && yarn run template:experiments-rna",
-        "template:all": "yarn run template:samples && yarn run template:experiments"
+        "template:all": "yarn run template:samples && yarn run template:experiments && mv *.xslx templates/"
     }
 }
