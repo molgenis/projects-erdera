@@ -242,7 +242,7 @@ class BuildTemplate:
             log.info('Building sheet for %s', table)
             table_meta = metadata.get_table(by='name', value=table)
 
-            excluded_types = ['SECTION', 'HEADING']
+            excluded_types = ['SECTION', 'HEADING', 'REFBACK']
             col_meta = [
                 col for col in table_meta.columns
                 if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible') 
