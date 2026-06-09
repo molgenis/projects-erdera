@@ -18,7 +18,7 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_participants():
     """Retrieve metadata from /<staging area>/Participants"""
     logging.info('Retrieving required metadata')
-    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
+    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
         return client_ind.get(
             table='Participants',
             schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
@@ -63,6 +63,8 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         others_affected_dict)
 
     pedigree = pedigree.drop_duplicates()
+    # remove the rows that do not have an ID
+    pedigree = pedigree.dropna(subset=['id'])
 
     # set alternate ids and others affected
     for _, family in pedigree.iterrows():
@@ -301,7 +303,7 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict):
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     # upload the mismatched phenotypes
@@ -312,7 +314,7 @@ def match_phenotypes(gpap_data: set):
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
     # get the RD3 ontology
     rd3_phenotypes = molgenis.get(
@@ -327,7 +329,7 @@ def match_phenotypes(gpap_data: set):
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
     # get the phenotypes quality control information
     phenotypes = molgenis.get(table='Phenotypes', as_df=True)
@@ -367,7 +369,7 @@ def check_no_match(rd3_data: set, non_matches: set):
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     molgenis.save_schema(data=missing_df, table='Phenotypes')
@@ -382,7 +384,7 @@ async def match_ontologies(ontology: str, gpap_data: dict, gpap_field_name: str,
     molgenis = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
     # get the RD3 ontology and overrides
     rd3_ontology = molgenis.get(
@@ -547,8 +549,9 @@ def build_import_disease_history(client, data: pd.DataFrame):
     disease_history = disease_history.drop(columns=['disease code'])
 
     # upload the data
-    client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
+    client.truncate(table='Clinical observations', schema='erdera') # first truncate in order to update (to prevent duplicates)
     client.save_schema(table='Clinical observations', data=clinical_obs)
+    client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
 
 def parse_observations(obs):
     """
@@ -719,7 +722,7 @@ if __name__ == "__main__":
     db = Client(
         environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
