@@ -25,93 +25,54 @@ def get_staging_area_participants():
             as_df=True
         )
     
-def determine_new_participants(client: Client, data: pd.DataFrame):
-    """Determine which individuals are new and which should be updated - unfinished"""
-    # get current RD3 information
-    rd3_individuals = client.get(table='Individuals', as_df=True)
-    current_ids = rd3_individuals['id']
-
-    # add column to capture whether an individual is new or should be updated
-    data['is new'] = ~data['report_id'].isin(current_ids)
-
-    return data
-
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
     # retrieve current pedigrees in RD3 - unfinished
     # current_pedigrees = client.get(table='Pedigree', as_df=True) 
 
     # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
-    pedigree = data[['famid', 'family_id', 'otheraffected']].rename(columns={
+    pedigree = (data[['famid', 'family_id', 'otheraffected']].rename(columns={
         'famid': 'id',
         'family_id':'alternate ids',
         'otheraffected': 'others affected'
     })
-
-    # check if family is new - unfinished
-    # pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
-
-    # for the is new pedigree true cases all mapping steps can be done immediately 
-    # for the falses we need to check if fields are different 
+    .dropna(subset = ['id'])
+    )
 
     others_affected_dict = {
         'Yes': True,
         'No': False
     }
-
     pedigree['others affected'] = pedigree['others affected'].map(
         others_affected_dict)
 
-    pedigree = pedigree.drop_duplicates()
-    # remove the rows that do not have an ID
-    pedigree = pedigree.dropna(subset=['id'])
+    # gather and set the alternate IDs of the families
+    alt_ids = (
+        pedigree
+        .dropna(subset=['alternate ids'])
+        .groupby('id')['alternate ids']
+        .agg(lambda x: ','.join(sorted(set(x))))
+        )
 
-    # set alternate ids and others affected
-    for _, family in pedigree.iterrows():
-        family_id = family['id']
-        # retrieve the family IDs for this family
-        alternate_ids = pedigree.loc[pedigree['id']
-                                                == family_id, 'alternate ids'].to_list()
-        # check if there is any data (other than NA)
-        if not pd.Series(alternate_ids).isna().all():
-            # get the filtered data, without NAs
-            non_na = [id for id in alternate_ids if not pd.isna(id)]
-            # add the alternate IDs to the pedigree data (as an array)
-            pedigree.loc[pedigree['id'] == family_id, 'alternate ids'] = ','.join(set(non_na))
-
-        # get list of others affected field - i.e., are there other family members affected by the disease
-        others_affected = pedigree.loc[pedigree['id'] == family_id, 'others affected'].to_list()
-        non_na = [x for x in others_affected if not np.isnan(x)] # only keep non NA values
-        non_na_unique = set(non_na) # get the unique values
-        if len(non_na_unique) == 1: # set field
-            pedigree.loc[pedigree['id'] == family_id, 'others affected'] = next(iter(non_na_unique))
-        # if the length is more than 1, this field for this value is both True and False, 
-        # this means that for at least one family members the 'others affected' was set to True, meaning
-        # that this field can be set to True for all family members 
-        elif len(non_na_unique) == 2: 
-            pedigree.loc[pedigree['id'] == family_id, 'others affected'] = True
-        
-    pedigree = pedigree.drop_duplicates()
+    # gather and set the 'others affected' field. 
+    others = (
+        pedigree
+        .dropna(subset=['others affected'])
+        .groupby('id')['others affected']
+        # if a True is present for the family, set the field of the whole family to True
+        .any()
+        )
+    
+    # merge the to DFs together
+    pedigree = (
+        pedigree[['id']]
+        .drop_duplicates()
+        .merge(alt_ids, on='id', how='left')
+        .merge(others, on='id', how='left')
+        )
             
     # upload
     client.save_schema(table='Pedigree', data=pedigree)
-
-    # work in progress - unfinished
-    # updated_records = pedigree.loc[pedigree['is new'] == False].copy() # get the records to be updated
-    current_pedigrees = client.get(table='Pedigree', as_df=True)
-
-    current_pedigrees_ids = current_pedigrees['id']
-    pedigree['is new pedigree'] = ~pedigree['id'].isin(current_pedigrees_ids)
-
-    merged = pedigree.merge(current_pedigrees, on='id', how='inner', suffixes = ('_new', '_old'))
-
-    changed_mask = (merged
-                    .filter(like='_new')
-                    .ne(merged.filter(like='_old').values)
-                    .any(axis=1)
-                    )
-    
-    merged['changed'] = changed_mask
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
@@ -130,7 +91,6 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     individual_status_dict = {
         'Deceased': 'Dead'
     }
-
     individuals['individual status'] = individuals['individual status'].replace(
         individual_status_dict)
 
@@ -143,21 +103,25 @@ def build_import_individuals_table(client, data: pd.DataFrame):
         gender_dict)
 
     # map age group
-    individuals['age at enrolment'] = pd.to_numeric(
-        individuals['age at enrolment'], errors='coerce')
-    individuals['age at enrolment'] = "P" + \
-        individuals['age at enrolment'].astype('Int64').astype('string') + "Y"
+    age = pd.to_numeric(individuals['age at enrolment'], errors='coerce')
+    individuals['age at enrolment'] = "P" + age.astype('Int64').astype('string') + "Y"
 
     # upload individuals data to RD3
     client.save_schema(table='Individuals', data=individuals)
 
+def add_incomplete_families_resource(client: Client):
+    """Create a new resource to capture the incomplete families"""
+    resources = pd.DataFrame({
+        'id': 'Incomplete families',
+        'name': 'Incomplete families',
+        'description': 'Capture incomplete families, these families are missing an index case'
+    })
 
-def build_import_pedigree_members(client, data: pd.DataFrame):
-    """ SKIPPED FOR NOW 
-    There are some incomplete families. Each family should have at least an index case, currently this is not always the case. 
-    This is becase (a) GPAP has not processed all cases yet or (b) submitters have supplied incomplete metadata. 
-    TODO: create a new resource that captures families without an index in order to flag the incomplete families.
-    Map staging area data into the Pedigree members table
+    # save resources
+    client.save_schema(table='Resources', data=resources)
+
+def build_import_pedigree_members(client: Client, data: pd.DataFrame):
+    """ Map staging area data into the Pedigree members table
     If index = Yes, then relative is itself (i.e., the patient). 
     If index = No, then relative is the individual of the same family with index set to yes.
     """
@@ -168,28 +132,31 @@ def build_import_pedigree_members(client, data: pd.DataFrame):
             'affectedStatus': 'affected'
         })
 
-    # initialise new column to capture relative and/or relation information
-    pedigree_members['relative'] = None
-    pedigree_members['relation'] = None
+    # remove the rows with an empty (NA) value for the family ID
+    pedigree_members = pedigree_members.dropna(subset=['pedigree'])
 
-    # gather relative and relation information based on index column
-    unclear_members = []
-    for index, member in pedigree_members.iterrows():
-        is_index = member.get('index')
-        famid = member.get('pedigree')
-        if is_index == 'Yes':  # if index = Yes, the individual is a patient
-            pedigree_members.loc[index, 'relative'] = member.get('individual')
-            pedigree_members.loc[index, 'relation'] = 'Patient'
-        elif is_index == 'No':
-            # if the individual is not the index, get the family member that is the index
-            relative = pedigree_members.loc[(pedigree_members['pedigree'] == famid) &
-                                            (pedigree_members['index'] == 'Yes'), 'individual'].squeeze()
-            if len(relative) != 0:
-                pedigree_members.loc[index, 'relative'] = relative
-            else:  # this should not be the case and should be flagged as an error
-                print(f'no diseased relative for individual: {member.get('individual')} from family: {famid}')
-                unclear_members.append({'individual': member.get('individual'),
-                                        'family ID': famid})
+    # create a lookup table where each family is mapped to the index individual of the family
+    index_map = (pedigree_members[pedigree_members['index'] == 'Yes']
+                 .set_index('pedigree')['individual'])
+    # set the relative of each member to the index case of the family
+    pedigree_members['relative'] = pedigree_members['pedigree'].map(index_map)
+    
+    # Set relation column
+    pedigree_members['relation'] = None
+    pedigree_members.loc[pedigree_members['index'] == 'Yes', 'relation'] = 'Patient'
+
+    # Find families without an index
+    families_wo_index = pedigree_members.loc[pedigree_members['relative'].isna(),'pedigree'].unique().tolist()
+    log.info(f'The following families are incomplete, i.e., missing an index case: {families_wo_index}')
+    # remove these members
+    pedigree_members = pedigree_members[~pedigree_members['pedigree'].isin(families_wo_index)]
+
+    # flag the incomplete families in the Pedigree table 
+    add_incomplete_families_resource(client=client)
+    pedigree = client.get('Pedigree', as_df = True)
+    pedigree.loc[pedigree['id'].isin(families_wo_index),
+                 'included in resources'] = 'Incomplete families'
+    client.save_schema(table='Pedigree', data=pedigree) # upload with updated field 
 
     # remove the index column
     pedigree_members = pedigree_members.drop(columns={'index'})
@@ -202,14 +169,8 @@ def build_import_pedigree_members(client, data: pd.DataFrame):
     pedigree_members['affected'] = pedigree_members['affected'].map(
         affected_dict)
 
-    # write pedigree information to file
-    output_path = environ['OUTPUT_PATH']
-    pedigree_members.to_csv(f'{output_path}pedigree members.csv', index=False)
-    pd.DataFrame(unclear_members).to_csv(
-        f'{output_path}unclear_family_members.csv', index=False)
-
-    # upload - skipped
-    # client.save_schema(table = 'Pedigree members', data = pedigree_members)
+    # upload
+    client.save_schema(table = 'Pedigree members', data = pedigree_members)
 
 
 def build_import_clinical_observations(client, data: pd.DataFrame):
@@ -301,7 +262,7 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict):
     .apply(tuple, axis=1).isin(set(mapping))]
 
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
         token=environ['EMX2_HOST_TOKEN']
     )
@@ -312,7 +273,7 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict):
 def match_phenotypes(gpap_data: set):
     """Match phenotypes"""
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
         token=environ['EMX2_HOST_TOKEN']
     )
@@ -327,7 +288,7 @@ def match_phenotypes(gpap_data: set):
 
     # check for which gpap cases quality control has taken place
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
         token=environ['EMX2_HOST_TOKEN']
     )
@@ -367,7 +328,7 @@ def check_no_match(rd3_data: set, non_matches: set):
     for code in missing_codes)
 
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
         token=environ['EMX2_HOST_TOKEN']
     )
@@ -382,7 +343,7 @@ async def match_ontologies(ontology: str, gpap_data: dict, gpap_field_name: str,
     mappings_name = the name of the table in the ontology mappings schema
     """
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
         token=environ['EMX2_HOST_TOKEN']
     )
@@ -459,51 +420,53 @@ def build_import_disease_history(client, data: pd.DataFrame):
     clinical_obs = client.get(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
                               table='Clinical observations',
                               as_df=True)
+    # create a map of individual ID and the corresponding auto generated ID
+    id_map = clinical_obs.set_index('individuals')['id']
 
-    # capture individual's auto id
     disease_history2 = []
-    diseases_dict = {}
+    diseases_set = set()
     for _, disease_elem in disease_history.iterrows():
         # get the P-ID
         report_id = disease_elem['report_id']
         # get the auto id generated for this individual
-        id = clinical_obs.loc[clinical_obs['individuals']
-                              == report_id, 'id'].squeeze()
+        id = id_map.get(report_id)
+
         # get the age group information
         age_group = disease_history.loc[disease_history['report_id']
                                         == report_id, 'age group at onset']
         clinical_obs.loc[clinical_obs['individuals'] ==
                          report_id, "age group at onset"] = age_group
+        
         # get all diseases from this individual
-        diseases_all = disease_elem.get('disease')
-        # there are cases when the diseases is a string of an empty list: '[]'
-        if isinstance(diseases_all, str):
-            diseases_all = ast.literal_eval(diseases_all)  # convert to list
-        if isinstance(diseases_all, (list)):  # check if the input is of type list
-            if len(diseases_all) != 0:  # check if the list is not empty
-                # add a new entry for each disease in the list
-                for disease in diseases_all:
-                    disease_ordo = disease.get('ordo')
-                    if disease_ordo is not None and len(disease_ordo) != 0:
-                        if disease_ordo.get('name') is None:
-                            print(report_id)
-                        new_entry = {}
-                        new_entry['part of clinical observation'] = id
-                        new_entry['disease'] = disease.get('ordo').get('name')
-                        new_entry['disease status'] = disease.get(
-                            'status')  # e.g., confirmed, suspected
-                        new_entry['disease code'] = disease.get('ordo').get('id')
-                        disease_history2.append(new_entry)
-                        # save the disease names with code as prevalent in GPAP
-                        diseases_dict[f'{disease.get('ordo').get('name')},{disease.get('ordo').get(
-                            'id')}'] = disease.get('ordo').get('id')
+        diseases_all = parse_observations(disease_elem.get('disease'))
+
+        for disease in diseases_all:
+            disease_ordo = disease.get('ordo')
+            if not disease_ordo:
+                continue
+
+            name = disease_ordo.get('name')
+            code = disease_ordo.get('id')
+            status = disease.get('status')
+
+            if name is None:
+                print(report_id)
+
+            disease_history2.append({
+                'part of clinical observation': id,
+                'disease': name,
+                'disease status': status,  # e.g. confirmed, suspected
+                'disease code': code
+            })
+
+            diseases_set.add((name, code))
 
     # convert list to a dataframe
     disease_history = pd.DataFrame(disease_history2)
 
     diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict, 'diagnosis', 'Diseases'))
     # make tuple of the key 
-    diseases_dict = {tuple(k.split(',')): v for k, v in diseases_dict.items()}
+    #diseases_dict = {tuple(k.split(',')): v for k, v in diseases_dict.items()}
     # map the disease based on the name + code 
     disease_history['disease'] = disease_history.apply(lambda row: diseases_dict.get((row['disease'], row['disease code']), row['disease']), axis=1)
     #disease_history['disease'] = disease_history['disease'].replace(diseases_dict)
@@ -511,8 +474,8 @@ def build_import_disease_history(client, data: pd.DataFrame):
     # get the unmatched diseases (the diseases from GPAP not present in RD3)
     # only get the name without the code
     unmatched_names = [entry['incoming value'] for entry in unmatched]
-    to_delete = [tuple(item.split(',')) for item in unmatched_names]
-    mask = ~disease_history.apply(lambda row: (row['disease'], row['disease code']) in to_delete, axis=1)
+   # to_delete = [tuple(item.split(',')) for item in unmatched_names]
+    mask = ~disease_history.apply(lambda row: (row['disease'], row['disease code']) in unmatched_names, axis=1)
     disease_history = disease_history[mask]
     # tmp = disease_history.loc[disease_history['disease'].isin(
     #     unmatched_names)].index  # get the indices of the rows to remove (no match)
@@ -599,36 +562,40 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     clinical_obs = client.get(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
                               table='Clinical observations',
                               as_df=True)
+    # create a map of individual ID and the corresponding auto generated ID
+    id_map = clinical_obs.set_index('individuals')['id']
 
     pheno_observations2 = []
     observations = set()
-    for index, pheno_obs in phen_observations.iterrows():
+    for _, pheno_obs in phen_observations.iterrows():
         # get the automatically generated id for this individual
-        id = clinical_obs.loc[clinical_obs['individuals']
-                              == pheno_obs['report_id'], 'id'].squeeze()
+        report_id = pheno_obs['report_id']
+        id = id_map.get(report_id)
+
         # check if the individual has a clinical observations ID - otherwise the individual is present in the 
         # GPAP staging area data but not in RD3
-        if len(id) == 0:
+        if pd.isna(id):
             logging.warning(f'Individual {pheno_obs['report_id']} does not have a clinical observation ID. The \
     individual is not included in the Phenotype Observations.')
             continue
+        
         # get all observations of this individual
-        observations_all = pheno_obs.get('type')
-        # make sure the observations are of type list 
-        observations_all = parse_observations(observations_all)
-
+        observations_all = parse_observations(pheno_obs.get('type'))
+        
         # loop through the phenotypic observations of the individual
         for observation in observations_all:
-            if observation.get('name') is not None:
-                new_entry = {}
-                new_entry['part of clinical observation'] = id
-                new_entry['type'] = observation.get('name')
-                # observed (GPAP) and excluded (RD3) have opposite meanings, so negate boolean
-                new_entry['excluded'] = not observation.get('observed')
-                new_entry['phenotype code'] = observation.get('id')
-                pheno_observations2.append(new_entry)
-                # save the phenotype names with code as prevalent in GPAP
-                observations.add((observation.get('name'), observation.get('id')))
+            name = observation.get('name')
+            if name is None:
+                continue
+            
+            pheno_observations2.append({
+                'part of clinical observation': id,
+                'type': name,
+                'excluded': not observation.get('observed'),
+                'phenotype code': observation.get('id')
+            })
+            # save the phenotype names with code as prevalent in GPAP
+            observations.add((name, observation.get('id')))
 
     # convert phenotypic observations list to df
     phen_observations = pd.DataFrame(pheno_observations2)
@@ -720,15 +687,12 @@ if __name__ == "__main__":
     participants = get_staging_area_participants()
 
     db = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
         token=environ['EMX2_HOST_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
-
-    # adds a column to the data with the information if an individual is new or needs to be updated
-    participants = determine_new_participants(client=db, data=participants)
 
     # 1. Pedigree table mapping
     build_import_pedigree_table(db, participants)
