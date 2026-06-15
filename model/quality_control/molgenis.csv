@@ -7,4 +7,6 @@ Mismatches,,,is correct,,bool,,,,,,,,,FALSE,,,,,,,
 Mismatches,,,type of mismatch,,ontology,,,,,Type of mismatch,,,,,,,,,,,
 Phenotypes,Mismatches,,,,,,,,,,,,,,,,,,,,The mismatches between the GPAP and RD3 phenotypes
 Phenotypes,,,correct phenotype,,ontology,,,,CatalogueOntologies,Phenotypes,,,,,,isCorrect === false,,,,,
+Diseases,Mismatches,,,,,,,,,,,,,,,,,,,,The mismatches between the GPAP and RD3 diseases
+Diseases,,,correct disease,,ontology,,,,CatalogueOntologies,Diseases,,,,,,isCorrect === false,,,,,
 Mismatches,,,comment,,text,,,,,,,,,,,,,,,,
