@@ -2,10 +2,6 @@
 """
 import logging
 from os import environ
-from os import remove
-import asyncio
-import zipfile
-from zipfile import ZipFile
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -20,69 +16,23 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_experiments():
     """Retrieve metadata from /<staging area>/Experiments"""
     logging.info('Retrieving required metadata')
-    with Client(environ['MOLGENIS_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
         return client_ind.get(
             table='Experiments',
             schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
             as_df=True
         )
     
-def add_resources():
+def add_resources(client: Client):
     """Adding ERDERA and EMX2 API as resources to RD3. This function should be a part of a setting up script"""
     resources = pd.DataFrame({
-        'id': ['ERDERA','EMX2 API'],
-        'name': ['ERDERA', 'EMX2 API'],
-        'type': ['Registry', 'Other type'],
-        'description': ['', 'The purpose of this is to test EMX2 API calls']
+        'id': ['ERDERA','SOLVE-RD'],
+        'name': ['ERDERA', 'SOLVE-RD'],
+        'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases']
     })
 
     # save resources
-    resources.to_csv(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Resources.csv', index=False)
-
-def make_endpoint():
-    """This function makes an endpoint necessary for the mapping. This function should be a part of a setting up script"""
-    # disabled
-    endpoint = {'id':'main_fdp', 
-                'type': 'https://w3id.org/fdp/fdp-o#MetadataService,http://www.w3.org/ns/dcat#Resource,http://www.w3.org/ns/dcat#DataService,https://w3id.org/fdp/fdp-o#FAIRDataPoint',
-                'name': "MOLGENIS Fair Data Point",
-                'version':'v1.2',
-                'description':'MOLGENIS FDP Endpoint for the catalogue data model',
-                'publisher.resource':'EMX2 API',
-                'publisher.id':'MOLGENIS',
-                'language':'https://www.loc.gov/standards/iso639-2/php/langcodes_name.php?iso_639_1=en',
-                'license':'https://www.gnu.org/licenses/lgpl-3.0.html#license-text',
-                'conformsTo':'https://specs.fairdatapoint.org/fdp-specs-v1.2.html',
-                'metadataCatalog':'EMX2 API',
-                'conformsToFdpSpec':'https://specs.fairdatapoint.org/fdp-specs-v1.2.html'}
-    
-    # save endpoint
-    pd.DataFrame([endpoint]).to_csv(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Endpoint.csv', index=False)
-
-def make_agent(): 
-    """This function makes an agent 'molgenis'. This function should be a part of a setting up script"""
-    # disabled
-    agent = {
-        'resource': 'EMX2 API',
-        'id': 'MOLGENIS',
-        'website': 'https://molgenis.org/',
-        'email': 'support@molgenis.org',
-        'mg_draft': 'FALSE'
-    }
-
-    # save agent
-    pd.DataFrame([agent]).to_csv(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Agents.csv', index=False)
-
-async def upload_curation(client: Client):
-    """Upload Resources, Agent, and Endpoint"""
-    # make a name for the zipped folder
-    zip_file_name=f'{environ['OUTPUT_PATH']}archive.zip'
-    # zip the data
-    with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
-        my_zip.write(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Agents.csv', 'Agents.csv')
-        my_zip.write(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Endpoint.csv', 'Endpoint.csv')
-        my_zip.write(f'{environ['OUTPUT_PATH']}ERDERA/GPAP/Resources.csv', 'Resources.csv')
-    # upload the zipped file with the molgenis schema and the molgenis members
-    await client.upload_file(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'], file_path=zip_file_name)
+    client.save_schema(table='Resources', data=resources)
 
 def get_mappings_name(rd3_field_name: str):
     """Get the name of the mappings table as it's defined in the ontology mappings schema
@@ -138,11 +88,9 @@ def match_ontology(gpap_data: list):
 def map_owner_to_organisation(owners: list):
     """Upload the GPAP owners as organisations in CatalogueOntologies"""
     ontologies_client = Client(
-       # environ['EMX2_HOST'],
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        #token=environ['EMX2_HOST_TOKEN']
-        token=environ['LOCAL_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     organisations = ontologies_client.get(
@@ -159,7 +107,7 @@ def map_owner_to_organisation(owners: list):
     ontologies_client.save_schema(table='Organisations', 
                                   data=new_organisations_df)
     
-def build_samples(data: pd.DataFrame):
+def upload_samples(client: Client, data: pd.DataFrame):
     """Build and import the sample metadata based on GPAP's experiments. """
 
     samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID', 'ExperimentID']]\
@@ -179,13 +127,10 @@ def build_samples(data: pd.DataFrame):
     # remove rows without a RD3 ontology term equivalent
     samples_srDNA = samples_srDNA.drop(tmp, axis=0)
 
-    # add used in experiments field
-    samples_srDNA['used in experiments'] = samples_srDNA['id']
-
-    # save file as csv
-    pd.DataFrame([samples_srDNA]).to_csv(f'{environ['OUTPUT_PATH']}ERDERA/Samples srDNA.csv', index=False)
+    # upload samples
+    client.save_schema(table='Samples srDNA', data=samples_srDNA)
     
-def build_import_srDNA_experiments(client: Client, data: pd.DataFrame):
+def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     """This function maps GPAP experiments to srDNA experiments in RD3"""
     srDNA = data[['ExperimentID', 'LocalExperimentID', 
                            'kit', 
@@ -205,17 +150,15 @@ def build_import_srDNA_experiments(client: Client, data: pd.DataFrame):
         'library_source': 'library source'
         })
 
-    ## map (sub)projects # TODO: this needs to be improved, is only necessary at initialization 
+    ## map (sub)projects
     # get the resources
-    make_agent()
-    make_endpoint()
-    add_resources()
-    asyncio.run(upload_curation(client=client))
-
+    add_resources(client=client)
+    
     # combine project and subproject from GPAP to included in resources in RD3
-    # TODO: add solve-rd as a resource and link the experiments to this resource
-    srDNA.loc[srDNA['project'].isin(['LatinSeq ERDERA', 'Solve-RD ERDERA', 'RD-Connect ERDERA', 'Solve-RD CMS ERDERA', 'RD-Connect Solve-RD ERDERA',
-                                                       'Consequitur Solve-RD ERDERA', 'NeurOmics Solve-RD ERDERA']), 'project'] = 'ERDERA' # rename project LatinSeq ERDERA to ERDERA
+    srDNA.loc[srDNA['project'].isin(['LatinSeq ERDERA', 'RD-Connect ERDERA']), 'project'] = 'ERDERA' # rename ERDERA projects
+    srDNA.loc[srDNA['project'].isin(['Solve-RD ERDERA', 'Solve-RD CMS ERDERA', 'RD-Connect Solve-RD ERDERA',
+                                    'Consequitur Solve-RD ERDERA', 'NeurOmics Solve-RD ERDERA']), 'project'] = 'SOLVE-RD' # rename SOLVE-RD projects
+
     # tmp remove subproject for now based on GPAP's comment
     srDNA['subproject'] = None
     srDNA['included in resources'] = srDNA[['project', 'subproject']].apply(
@@ -262,6 +205,7 @@ def build_import_srDNA_experiments(client: Client, data: pd.DataFrame):
         owner = row['Owner']
         if not pd.isna(erns):
             srDNA.loc[index, 'affiliated organisations'] = ','.join(str(field) for field in [erns, owner] if pd.notna(field))
+    add_organisations_to_individuals(client=client, ind_org_dict=dict(zip(srDNA['individuals'], srDNA['affiliated organisations'])))
 
     # remove erns and owner columns
     srDNA = srDNA.drop(columns=['erns', 'Owner']) 
@@ -272,44 +216,27 @@ def build_import_srDNA_experiments(client: Client, data: pd.DataFrame):
     # set sample ID (which is the experiment ID)
     srDNA['sample'] = srDNA['id']
     
-    # save the experiments as csv
-    pd.DataFrame([srDNA]).to_csv(f'{environ['OUTPUT_PATH']}ERDERA/Experiments srDNA.csv', index=False)
-    
-async def upload_experiments_and_samples(client: Client, data: pd.DataFrame):
-    """Samples refers to experiments and the other way around, because of this, the data needs to be uploaded together"""
-    build_samples(data=data)
-    build_import_srDNA_experiments(data=data)
+    # upload the experiments
+    client.save_schema(table='Experiments srDNA', data=srDNA)
 
-    # make a name for the zipped folder
-    zip_file_name=f'{environ['OUTPUT_PATH']}ERDERA/archive_srDNA.zip'
-    # zip the data
-    with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
-        my_zip.write(f'{environ['OUTPUT_PATH']}ERDERA/Samples srDNA.csv', 'Samples srDNA.csv')
-        my_zip.write(f'{environ['OUTPUT_PATH']}ERDERA/Experiments srDNA.csv', 'Experiments srDNA.csv')
-    # upload the zipped file with the molgenis schema and the molgenis members
-    await client.upload_file(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'], file_path=zip_file_name)
-
-def delete_files(): 
-    """This function deletes the files that were created for upload. After uploading was succesfull the files can be deleted."""
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/Samples srDNA.csv')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/Experiments srDNA.csv')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/archive_srDNA.zip')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/Agents.csv')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/Endpoint.csv')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/Resources.csv')
-    remove(f'{environ['OUTPUT_PATH']}ERDERA/archive.zip')
+def add_organisations_to_individuals(client: Client, ind_org_dict: dict):
+    """Add the submitting organisations to the individuals table"""
+    individuals = client.get(table='Individuals', as_df=True)
+    individuals['affiliated organisations'] = individuals['id'].map(ind_org_dict)
+    client.save_schema(table='Individuals', data=individuals)
 
 if __name__ == "__main__":
 
     experiments = get_staging_area_experiments()
 
     db = Client(
-        environ['MOLGENIS_HOST'],
+        environ['EMX2_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['MOLGENIS_TOKEN']
+        token=environ['EMX2_HOST_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
 
     # build and import srDNA experiments and samples
-    upload_experiments_and_samples(client=db, data=experiments)
+    upload_samples(client=db, data=experiments)
+    upload_srDNA_experiments(client=db, data=experiments)
