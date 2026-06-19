@@ -206,7 +206,7 @@ if __name__ == "__main__":
                 table='Job errors', data=api_run_errors)
             
     with Client(url=os.getenv('EMX2_HOST'),
-                schema= os.getenv('EMX2_HOST_SCHEMA_GPAP'),
+                schema= os.getenv('MOLGENIS_HOST_SCHEMA_SOURCE'),
                 token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
 
         molgenis.save_schema(table="Participants", data=participants_df)
