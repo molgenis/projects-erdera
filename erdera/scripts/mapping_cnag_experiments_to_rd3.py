@@ -26,8 +26,8 @@ def get_staging_area_experiments():
 def add_resources(client: Client):
     """Adding ERDERA and EMX2 API as resources to RD3. This function should be a part of a setting up script"""
     resources = pd.DataFrame({
-        'id': ['ERDERA','SOLVE-RD'],
-        'name': ['ERDERA', 'SOLVE-RD'],
+        'id': ['ERDERA','ERDERA Solve-RD'],
+        'name': ['ERDERA', 'ERDERA Solve-RD'],
         'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases']
     })
 

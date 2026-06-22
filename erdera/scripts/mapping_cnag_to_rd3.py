@@ -356,12 +356,13 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontol
 
 def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapping: dict):
     """Check if there is no RD3 match for the data entry"""
+    # get the codes of the GPAP entries that do not have an RD3 match (i.e., this code is missing in the RD3 ontology)
     missing_codes = set([i[1] for i in non_matches]) - set([i[1] for i in rd3_data])
 
     # create a dictionary of the non-matches with the codes as keys
     non_matches_dict = {y: x for x,y in non_matches}
 
-    # create a df of the missing phenotypes (missing in RD3)
+    # create a df of the missing entries (missing in RD3)
     missing_df = pd.DataFrame({
         'source': 'phenostore_service/api/participants_by_exp/features',
         'incoming value': non_matches_dict.get(code),
@@ -374,11 +375,13 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
         token=token
     )
-
-    diseases = molgenis.get(table='Diseases', as_df=True)
-    new_value = diseases[~diseases['new value'].isna()]
+    # check if there are new values in the ontology mappings schema to prevent overwrite during upload 
+    ontology_mappings_data = molgenis.get(table=rd3_ontology_name, as_df=True)
+    new_value = ontology_mappings_data[~ontology_mappings_data['new value'].isna()]
+    # update the mapping dictionary with the new value 
     mapping.update(new_value.set_index(['incoming value', 'incoming code'])['new value'].to_dict())
 
+    # make sure the value(s) that have a new value are removed from the df, so the new value will not be overwritten
     missing_df = (missing_df.merge(new_value[['source', 'incoming value', 'incoming code']].drop_duplicates(),
                   on=['source', 'incoming value', 'incoming code'],
                   how='left',
@@ -386,6 +389,7 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
                   .query("_merge == 'left_only'")
                   .drop(columns='_merge'))
 
+    # save the df
     molgenis.save_schema(data=missing_df, table=rd3_ontology_name)
 
 def match_phenotypes(gpap_data: set):
@@ -441,6 +445,9 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
                    non_matches = non_matches,
                    rd3_ontology_name=rd3_ontology_name,
                    mapping=mapping)
+
+    # remove the entries that have a mapping from the non-matches list
+    non_matches = non_matches - set(mapping.keys())
 
     return non_matches, mapping
 
@@ -507,30 +514,10 @@ def build_import_disease_history(client, data: pd.DataFrame):
     # map the corrections
     disease_history.loc[disease_history['key'].isin(mappings), 'disease'] = disease_history['key'].map(mappings)
     # remove the non-matches
-    # first remake the key so the corrections are incorporated 
+    # first remake the key so the corrections are incorporated
     disease_history['key'] = list(zip(disease_history['disease'], disease_history['disease code']))
     disease_history = disease_history[~disease_history['key'].isin(non_matches)]
    
-   #######
-
-    diseases_dict, unmatched = asyncio.run(match_ontologies('Diseases', diseases_dict, 'diagnosis', 'Diseases'))
-    # make tuple of the key 
-    #diseases_dict = {tuple(k.split(',')): v for k, v in diseases_dict.items()}
-    # map the disease based on the name + code 
-    disease_history['disease'] = disease_history.apply(lambda row: diseases_dict.get((row['disease'], row['disease code']), row['disease']), axis=1)
-    #disease_history['disease'] = disease_history['disease'].replace(diseases_dict)
-
-    # get the unmatched diseases (the diseases from GPAP not present in RD3)
-    # only get the name without the code
-    unmatched_names = [entry['incoming value'] for entry in unmatched]
-   # to_delete = [tuple(item.split(',')) for item in unmatched_names]
-    mask = ~disease_history.apply(lambda row: (row['disease'], row['disease code']) in unmatched_names, axis=1)
-    disease_history = disease_history[mask]
-    # tmp = disease_history.loc[disease_history['disease'].isin(
-    #     unmatched_names)].index  # get the indices of the rows to remove (no match)
-    # # remove rows without a RD3 disease equivalent
-    # disease_history = disease_history.drop(tmp, axis=0)
-
     # map the disease status TODO: use the mappings schema
     status_dict = {
         'Confirmed': 'Confirmed diagnosis'
