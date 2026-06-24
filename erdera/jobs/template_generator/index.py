@@ -29,11 +29,18 @@ TABLES: list[str] = []
 # process args: must send as a string separated with a ";"
 if len(sys.argv) >= 2:
     print("args", sys.argv[1])
+
     args = sys.argv[1].split(";")
     SCHEMA = args[0].replace('\"', '')
     TABLES = args[1].split(",")
+
+    ONTOLOGY_TAG = ""
+    if len(args) > 2:
+        ONTOLOGY_TAG = args[2]
+
     OUTPUT_FILE = f'{TABLES[0]}.xlsx'
-    log.info('Received args: schema=%s, tables=%s', SCHEMA, TABLES)
+    log.info('Received args: schema=%s, tables=%s, tag=%s',
+             SCHEMA, TABLES, ONTOLOGY_TAG)
 
 
 client = Client(url=HOST, token=environ['MOLGENIS_TOKEN'])
@@ -177,14 +184,15 @@ class BuildTemplate:
                     'Storage buffer',
                     'Storage conditions',
                     'Tissue type',
-                    'Library source', 
+                    'Library source',
                     'Sequencing platforms',
                     'Units',
                     'Concentration measurement type',
                     'Library layout'
                 ]:
-                    # query_filter = 'tags=="erdera"'
-                    query_filter = f"tags=='{sheet_name.split(' ')[1]}'"
+                    query_filter = 'tags=="erdera"'
+                    if ONTOLOGY_TAG != "":
+                        query_filter = f"tags=='{ONTOLOGY_TAG}'"
 
                 data = client.get(
                     table=ontology_table,
@@ -245,7 +253,7 @@ class BuildTemplate:
             excluded_types = ['SECTION', 'HEADING', 'REFBACK']
             col_meta = [
                 col for col in table_meta.columns
-                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible') 
+                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible')
             ]
 
             self.build_sheet(workbook=workbook,
