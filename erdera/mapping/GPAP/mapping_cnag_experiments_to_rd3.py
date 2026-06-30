@@ -238,8 +238,6 @@ if __name__ == "__main__":
         token=environ['MOLGENIS_TOKEN']
     )
 
-    output_path = environ['OUTPUT_PATH']
-
     # build and import srDNA experiments and samples
     upload_samples(client=db, data=experiments)
     upload_srDNA_experiments(client=db, data=experiments)

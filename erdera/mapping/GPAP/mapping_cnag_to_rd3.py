@@ -590,8 +590,6 @@ if __name__ == "__main__":
         token=environ['MOLGENIS_TOKEN']
     )
 
-    output_path = environ['OUTPUT_PATH']
-
     # 1. Pedigree table mapping
     build_import_pedigree_table(db, participants)
 

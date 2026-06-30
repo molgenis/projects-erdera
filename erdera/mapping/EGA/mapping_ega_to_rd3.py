@@ -17,10 +17,10 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_data(endpoint: str):
     """Retrieve metadata from the staging area (/<staging area>/<endpoint>)"""
     logging.info(f'Retrieving {endpoint} EGA information from staging area')
-    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
         return client_ind.get(
             table=endpoint,
-            schema=environ['EMX2_HOST_SCHEMA'],
+            schema=environ['SCHEMA_EGA_SOURCE'],
             as_df=True
         )
     
