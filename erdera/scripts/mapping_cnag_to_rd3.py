@@ -2,7 +2,6 @@
 import logging
 from os import environ
 import ast
-import asyncio
 
 import pandas as pd
 import numpy as np
@@ -18,10 +17,10 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_participants():
     """Retrieve metadata from /<staging area>/Participants"""
     logging.info('Retrieving required metadata')
-    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
         return client_ind.get(
             table='Participants',
-            schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
+            schema=environ['SCHEMA_GPAP_SOURCE'],
             as_df=True
         )
     
@@ -172,7 +171,6 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     # upload
     client.save_schema(table = 'Pedigree members', data = pedigree_members)
 
-
 def build_import_clinical_observations(client, data: pd.DataFrame):
     """Map staging area data into the clinical observations table"""
     clinical_observations = data[['report_id', 'solved', 'consanguinity']] \
@@ -199,9 +197,9 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
 
     # upload
     # first delete content of clinical observations
-    client.truncate(table='Phenotype observations', schema= 'erdera')
-    client.truncate(table='Disease history', schema= 'erdera')
-    client.truncate(table='Clinical observations', schema='erdera')    
+    client.truncate(table='Phenotype observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
+    client.truncate(table='Disease history', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
+    client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])    
     
     # then upload
     client.save_schema(table='Clinical observations',
@@ -226,19 +224,19 @@ def build_import_consent(client, data: pd.DataFrame):
 
     # upload the data
     # first truncate the consent table
-    client.truncate(table='Individual consent', schema='erdera')
+    client.truncate(table='Individual consent', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
     # then upload
     client.save_schema(table='Individual consent', data=indv_consent)
 
 def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontology_name: str):
-    """Upload the observations that have a mismatch between the name and/or code. """
+    """Upload the entries that have a mismatch between the name and/or code. """
     # create df of the non-matches for the quality control schema
-    df_mismatch_obs = pd.DataFrame(list(non_matches), columns=['name', 'code'])
+    df_mismatches = pd.DataFrame(list(non_matches), columns=['name', 'code'])
     # create a df of the rd3 names and codes
     rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
     # create a df of the non-matches merged with the rd3 names 
-    df_mismatch_names = pd.merge(df_mismatch_obs, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
-    df_mismatch_codes = pd.merge(df_mismatch_obs, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
+    df_mismatch_names = pd.merge(df_mismatches, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
+    df_mismatch_codes = pd.merge(df_mismatches, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
     
     df_mismatch_names = df_mismatch_names.rename(columns= { # rename columns to correspond to schema
         'name_x': 'GPAP name',
@@ -262,97 +260,13 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontol
     .apply(tuple, axis=1).isin(set(mapping))]
 
     molgenis = Client(
-        host,
-        schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-        token=token
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_QUALITY_CONTROL'],
+        token=environ['MOLGENIS_TOKEN']
     )
 
-    # upload the mismatched phenotypes
+    # upload the mismatches
     molgenis.save_schema(data=quality_control_upload, table=rd3_ontology_name)
-
-# def match_phenotypes(gpap_data: set):
-#     """Match phenotypes"""
-#     molgenis = Client(
-#         environ['EMX2_HOST'],
-#         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-#         token=environ['EMX2_HOST_TOKEN']
-#     )
-#     # get the RD3 ontology
-#     rd3_phenotypes = molgenis.get(
-#         table='Phenotypes', schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'], as_df=True)
-
-#     # create a set of the rd3 names and codes
-#     rd3_data = set(zip(rd3_phenotypes['name'], rd3_phenotypes['code']))
-#     # get the GPAP phenotypes that do not have a name and code match in RD3 
-#     non_matches = gpap_data - rd3_data
-
-#     # check for which gpap cases quality control has taken place
-#     molgenis = Client(
-#         environ['EMX2_HOST'],
-#         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-#         token=environ['EMX2_HOST_TOKEN']
-#     )
-#     # get the phenotypes quality control information
-#     phenotypes = molgenis.get(table='Phenotypes', as_df=True)
-#     phenotypes_new_value = phenotypes[~phenotypes['correct phenotype'].isna()] # get the rows that have a correction
-
-#     ## case 1: there is a _correct phenotype_ entry, meaning the GPAP entry should be this phenotype
-#     # create a dictionary of the GPAP name and code with the new value (the correct phenotype)
-#     mapping = phenotypes_new_value.set_index(['GPAP name', 'GPAP code'])['correct phenotype'].to_dict()
-
-#     ## case 2: the _is correct_ boolean is set to True, meaning the RD3 variant of the GPAP phenotype is correct
-#     phenotypes_is_correct = phenotypes[phenotypes['is correct']]
-#     # for these cases, the RD3 name is the correct one
-#     mapping.update(phenotypes_is_correct.set_index(['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
-
-#     # upload the mismatches
-#     upload_non_matches(rd3_data=rd3_data, non_matches=non_matches, mapping=mapping)
-#     # upload the cases where there is no RD3 data
-#     check_no_match(rd3_data=rd3_data, non_matches = non_matches)
-
-#     return non_matches, mapping
-
-# def match_diseases(gpap_data: set):
-#     """Match diseases"""
-#     molgenis = Client(
-#         host,
-#         schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-#         token=token
-#     )
-#     # get the RD3 ontology
-#     rd3_diseases = molgenis.get(
-#         table='Diseases', schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'], as_df=True)
-
-#     # create a set of the rd3 names and codes
-#     rd3_data = set(zip(rd3_diseases['name'], rd3_diseases['code']))
-#     # get the GPAP diseases that do not have a name and code match in RD3 
-#     non_matches = gpap_data - rd3_data
-
-#     # check for which gpap cases quality control has taken place
-#     molgenis = Client(
-#         host,
-#         schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-#         token=token
-#     )
-#     # get the disease quality control information
-#     diseases = molgenis.get(table='Diseases', as_df=True)
-#     diseases_new_value = diseases[~diseases['correct disease'].isna()] # get the rows that have a correction
-
-#     ## case 1: there is a _correct disease entry, meaning the GPAP entry should be this disease
-#     # create a dictionary of the GPAP name and code with the new value (the correct disease)
-#     mapping = diseases_new_value.set_index(['GPAP name', 'GPAP code'])['correct disease'].to_dict()
-
-#     ## case 2: the _is correct_ boolean is set to True, meaning the RD3 variant of the GPAP disease is correct
-#     diseases_is_correct = diseases[diseases['is correct']]
-#     # for these cases, the RD3 name is the correct one
-#     mapping.update(diseases_is_correct.set_index(['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
-
-#     # upload the mismatches
-#     upload_non_matches(rd3_data=rd3_data, non_matches=non_matches, mapping=mapping)
-#     # upload the cases where there is no RD3 data
-#     check_no_match(rd3_data=rd3_data, non_matches = non_matches)
-
-#     return non_matches, mapping
 
 def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapping: dict):
     """Check if there is no RD3 match for the data entry"""
@@ -371,9 +285,9 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
     for code in missing_codes)
 
     molgenis = Client(
-        host,
-        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
-        token=token
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_ONTOLOGY_MAPPINGS'],
+        token=environ['MOLGENIS_TOKEN']
     )
     # check if there are new values in the ontology mappings schema to prevent overwrite during upload 
     ontology_mappings_data = molgenis.get(table=rd3_ontology_name, as_df=True)
@@ -403,13 +317,13 @@ def match_diseases(gpap_data: set):
 def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
     """Match GPAP ontologies to RD3 and find mismatches"""
     molgenis = Client(
-        host,
-        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        token=token
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_ONTOLOGIES'],
+        token=environ['MOLGENIS_TOKEN']
     )
     # get the RD3 ontology
     rd3_ontology = molgenis.get(
-        table=rd3_ontology_name, schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'], as_df=True)
+        table=rd3_ontology_name, schema=environ['SCHEMA_ONTOLOGIES'], as_df=True)
 
     # create a set of the rd3 names and codes
     rd3_data = set(zip(rd3_ontology['name'], rd3_ontology['code']))
@@ -418,9 +332,9 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
 
     # check for which gpap cases quality control has taken place
     molgenis = Client(
-        host,
-        schema=environ['MOLGENIS_HOST_QUALITY_CONTROL'],
-        token=token
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_QUALITY_CONTROL'],
+        token=environ['MOLGENIS_TOKEN']
     )
     # get the quality control information
     qc_info = molgenis.get(table=rd3_ontology_name, as_df=True)
@@ -548,7 +462,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
     disease_history = disease_history.drop(columns=['disease code'])
 
     # upload the data
-    client.truncate(table='Clinical observations', schema='erdera') # first truncate in order to update (to prevent duplicates)
+    client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET']) # first truncate in order to update (to prevent duplicates)
     client.save_schema(table='Clinical observations', data=clinical_obs)
     client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
 
@@ -653,7 +567,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     data_entry_errors = phen_observations.groupby(['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
 
     if not phen_observations[data_entry_errors].empty:
-        logging.warning(f"Error! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
+        logging.warning(f"Warning! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
         the excluded field is both true and false for the following phenotypic feature(s): \
         {phen_observations[data_entry_errors]['type'].unique().tolist()} - removing the row(s)")
 
@@ -666,65 +580,14 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     client.save_schema(table='Phenotype observations',
                        data=phen_observations.drop_duplicates())
 
-    
-def build_import_variants(client: Client, data: pd.DataFrame):
-    """Builds and import variant information from GPAP to RD3
-    # disabled for now -- unfinished"""
-
-    variant_interpretations = data[[
-        'inheritance'
-    ]]
-
-    # TODO: use mappings schema
-    inheritance_dict = {
-        'HP:0001450': 'Y-linked inheritance',
-        'HP:0003745': '', # is sporadic inheritance, not included in our ontology
-        'HP:0000006': 'autosomal dominant inheritance',
-        'HP:0001419': 'X-linked recessive inheritance',
-        'HP:0001427': 'mitochondrial inheritance',
-        'HP:0001444': '', # 'typified by somatic mosaicism' not in included in our ontology
-        'HP:0000007': 'autosomal recessive inheritance',
-        'HP:0001470': 'sex-limited autosomal recessive inheritance, sex-limited autosomal dominant inheritance', #? the HP code is 'Sex-limited expression'
-        'HP:0001417': 'X-linked inheritance'
-    }
-
-    for index, interpretation in variant_interpretations.iterrows():
-        # get all observations of this individual
-        inheritance_all = interpretation.get('inheritance')
-        if isinstance(inheritance_all, str):
-            inheritance_all = ast.literal_eval(inheritance_all)
-        if isinstance(inheritance_all, (list)):
-            if len(inheritance_all) != 0:
-                inheritance_list = []
-                for inheritance_entry in inheritance_all:
-                    rd3_inheritance = inheritance_dict.get(inheritance_entry)
-                    inheritance_list.append(rd3_inheritance)
-        variant_interpretations.loc[index, 'inheritance'] = ','.join(inheritance_list)
-
-    client.save_schema(table='Variant interpretations', data=variant_interpretations)
-
-def build_import_genomic_variants(client: Client, data: pd.DataFrame):
-    """Builds and imports variant information from GPAP to RD3
-    Unfinished - disabled"""
-    genomic_variant = data[['regions']].copy() 
-
-    for index, region in genomic_variant.iterrows():
-        region_entry = region.get('regions')
-        if isinstance(region_entry, str):
-            region_entry = ast.literal_eval(region_entry)
-        if isinstance(region_entry, list):
-            for elem in region_entry:
-                genomic_variant.loc[index, 'id'] = elem.get('region')
-                genomic_variant.loc[index, 'chromosomal region'] = elem.get('region')
-
 if __name__ == "__main__":
 
     participants = get_staging_area_participants()
 
     db = Client(
-        environ['EMX2_HOST'],
+        environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['EMX2_HOST_TOKEN']
+        token=environ['MOLGENIS_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
