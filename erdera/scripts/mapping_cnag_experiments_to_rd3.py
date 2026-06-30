@@ -4,6 +4,7 @@ import logging
 from os import environ
 
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv
 
 from molgenis_emx2_pyclient.client import Client
@@ -16,19 +17,19 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_experiments():
     """Retrieve metadata from /<staging area>/Experiments"""
     logging.info('Retrieving required metadata')
-    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
         return client_ind.get(
             table='Experiments',
-            schema=environ['MOLGENIS_HOST_SCHEMA_SOURCE'],
+            schema=environ['SCHEMA_GPAP_SOURCE'],
             as_df=True
         )
     
 def add_resources(client: Client):
     """Adding ERDERA and EMX2 API as resources to RD3. This function should be a part of a setting up script"""
     resources = pd.DataFrame({
-        'id': ['ERDERA','ERDERA Solve-RD'],
-        'name': ['ERDERA', 'ERDERA Solve-RD'],
-        'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases']
+        'id': ['ERDERA','Solve-RD', 'ERDERA_PF1', 'ERDERA_PF2'],
+        'name': ['ERDERA', 'Solve-RD', 'ERDERA_PF1', 'ERDERA_PF2'],
+        'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases', 'Data freeze 1', 'Data freeze 2']
     })
 
     # save resources
@@ -50,10 +51,10 @@ def get_data(rd3_name: str):
     '''Get the mappings data'''
     mappings_name = get_mappings_name(rd3_name)[0]
    
-    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
         return client_ind.get(
             table=mappings_name,
-            schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
+            schema=environ['SCHEMA_ONTOLOGY_MAPPINGS'],
             as_df=True
         )
 
@@ -75,9 +76,9 @@ def match_ontology(gpap_data: list):
     unmatched_df['source'] = f'datamanagement_service/api/experimentsview/{get_mappings_name(gpap_data.name)[1]}'
 
     molgenis = Client(
-        environ['EMX2_HOST'],
-        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGY_MAPPINGS'],
-        token=environ['EMX2_HOST_TOKEN']
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_ONTOLOGY_MAPPINGS'],
+        token=environ['MOLGENIS_TOKEN']
     )
 
     # upload the values without a match to the ontology mappings schema
@@ -88,14 +89,14 @@ def match_ontology(gpap_data: list):
 def map_owner_to_organisation(owners: list):
     """Upload the GPAP owners as organisations in CatalogueOntologies"""
     ontologies_client = Client(
-        environ['EMX2_HOST'],
-        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
-        token=environ['EMX2_HOST_TOKEN']
+        environ['MOLGENIS_HOST'],
+        schema=environ['SCHEMA_ONTOLOGIES'],
+        token=environ['MOLGENIS_TOKEN']
     )
 
     organisations = ontologies_client.get(
         table='Organisations', 
-        schema=environ['MOLGENIS_HOST_SCHEMA_ONTOLOGIES'],
+        schema=environ['SCHEMA_ONTOLOGIES'],
         as_df=True)
     
     # get the new organisations 
@@ -155,16 +156,18 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     add_resources(client=client)
     
     # combine project and subproject from GPAP to included in resources in RD3
-    srDNA.loc[srDNA['project'].isin(['LatinSeq ERDERA', 'RD-Connect ERDERA']), 'project'] = 'ERDERA' # rename ERDERA projects
-    srDNA.loc[srDNA['project'].isin(['Solve-RD ERDERA', 'Solve-RD CMS ERDERA', 'RD-Connect Solve-RD ERDERA',
-                                    'Consequitur Solve-RD ERDERA', 'NeurOmics Solve-RD ERDERA']), 'project'] = 'SOLVE-RD' # rename SOLVE-RD projects
+    srDNA['tmp'] = np.where(srDNA['project'].str.contains('Solve-RD', na=False), 'Solve-RD', pd.NA) # capture the Solve-RD experiments
+    srDNA['tmp2'] = np.where(srDNA['project'].str.contains('ERDERA', na=False), 'ERDERA', pd.NA) # capture the ERDERA experiments
+    # rename the freeze information 
+    srDNA.loc[srDNA['subproject'].str.contains('ERDERA_PF1'), 'subproject'] = 'ERDERA_PF1'
+    srDNA.loc[srDNA['subproject'].str.contains(r"ERDERA_PF2|TOPFANA_01|TOPFANA_02|TOPFANA_03|TOPFANA_04"), 'subproject'] = 'ERDERA_PF2'
 
-    # tmp remove subproject for now based on GPAP's comment
-    srDNA['subproject'] = None
-    srDNA['included in resources'] = srDNA[['project', 'subproject']].apply(
-        lambda x: ','.join(x.dropna()), axis=1
+    # merge project and subproject
+    srDNA['included in resources'] = srDNA[['tmp', 'tmp2', 'subproject']].apply(
+        lambda x: ','.join(pd.unique(x.dropna())), axis=1
         )
-    srDNA = srDNA.drop(columns=['project', 'subproject'])
+    # drop the unused columns
+    srDNA = srDNA.drop(columns=['project', 'subproject', 'tmp', 'tmp2'])
 
     ## map library strategy
     field_name = 'library strategy'
@@ -213,7 +216,7 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     # local experiment id
     srDNA['local experiment id'] = srDNA['id']
 
-    # set sample ID (which is the experiment ID)
+    # set sample ID (which is the experiment ID for these samples)
     srDNA['sample'] = srDNA['id']
     
     # upload the experiments
@@ -230,9 +233,9 @@ if __name__ == "__main__":
     experiments = get_staging_area_experiments()
 
     db = Client(
-        environ['EMX2_HOST'],
+        environ['MOLGENIS_HOST'],
         schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['EMX2_HOST_TOKEN']
+        token=environ['MOLGENIS_TOKEN']
     )
 
     output_path = environ['OUTPUT_PATH']
