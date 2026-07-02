@@ -85,6 +85,7 @@ class GpapClient:
             "page": page,
             "pageSize": self.api_page_size,
             "fields": self.fields['participants'],
+            "inPlatformAll":True
         }
 
         url: str = f"{self.api_url}phenostore_service/api/participants_by_exp"

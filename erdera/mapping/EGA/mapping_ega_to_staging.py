@@ -121,9 +121,9 @@ if __name__ == "__main__":
     api_run_meta_df['ok'] = api_run_meta_df['ok'].replace({True:'true', False: 'false'})
 
     # upload the data
-    with Client(url=os.getenv('EMX2_HOST'),
-                schema= os.getenv('JOBS_SCHEMA'),
-                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
+    with Client(url=os.getenv('MOLGENIS_HOST'),
+                schema= os.getenv('SCHEMA_JOBS'),
+                token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
         molgenis.save_schema(table='Jobs Ega Api', data=api_run_meta_df)
 
@@ -133,9 +133,9 @@ if __name__ == "__main__":
     
     for key in ega_output_data.keys():        
         # import into the staging area 
-        with Client(url=os.getenv('EMX2_HOST'),
-                    schema= os.getenv('EMX2_HOST_SCHEMA'),
-                    token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
+        with Client(url=os.getenv('MOLGENIS_HOST'),
+                    schema= os.getenv('SCHEMA_EGA_SOURCE'),
+                    token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
             molgenis.save_schema(table=key, data=ega_output_data[key])
     

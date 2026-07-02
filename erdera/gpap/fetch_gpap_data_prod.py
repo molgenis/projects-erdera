@@ -3,18 +3,25 @@ Fetch GPAP data using the GpapClient
 This script logs into the GPAP API and fetches participants and experiments
 """
 
-import os
-import math
-import logging
+import asyncio
 import json
+import logging
+import math
+import os
+import shutil
 import time
-import requests
+import zipfile
+from zipfile import ZipFile
+
 import pandas as pd
+import requests
 from dotenv import load_dotenv
+
 from molgenis_emx2_pyclient import Client
 from erdera.clients.gpap.gpap_client_prod import GpapClient
 import erdera.clients.gpap.gpap_client_types as types
 from erdera.utils.index import date_now, date_today
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -108,6 +115,34 @@ def prepare_run_metadata() -> types.JobsGpapApi:
         'number of errors': 0
     }
 
+async def upload_staging_area_data(participants: pd.DataFrame, experiments: pd.DataFrame, client: Client):
+    """Upload the participant and experiment metadata to the 
+    GPAP staging area. Upload with a zipped file because the data is too large 
+    to upload otherwise."""
+
+    # first, delete the current data 
+    client.truncate(table='Participants', schema=os.getenv('SCHEMA_GPAP_SOURCE'))
+    client.truncate(table='Experiments', schema=os.getenv('SCHEMA_GPAP_SOURCE'))
+
+    # create a tmp directory to save the files
+    tmp_output_path = f'{os.getenv('OUTPUT_PATH')}tmp'
+    if not os.path.exists(tmp_output_path):
+        os.makedirs(tmp_output_path)
+    participants.to_csv(f'{tmp_output_path}/participants.csv', index=False)
+    experiments.to_csv(f'{tmp_output_path}/experiments.csv', index=False)
+    
+    # initialise an archive 
+    zip_file_name=f'{tmp_output_path}/archive.zip'
+
+    # zip the data
+    with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
+        my_zip.write(f'{tmp_output_path}/Participants.csv', 'Participants.csv')
+        my_zip.write(f'{tmp_output_path}/Experiments.csv', 'Experiments.csv')
+    # upload the zipped file
+    await client.upload_file(schema=os.getenv('SCHEMA_GPAP_SOURCE'), file_path=zip_file_name)
+
+    # delete the tmp folder and its contents
+    shutil.rmtree(tmp_output_path)
 
 if __name__ == "__main__":
 
@@ -121,7 +156,7 @@ if __name__ == "__main__":
         api_url=os.getenv("GPAP_PROD_API_URL"),
         token=os.getenv('GPAP_API_TOKEN')
     )
-    gpap.api_page_size = 100
+    gpap.api_page_size = 1000
     gpap.fields = fields
 
     # retrieve all participants
@@ -195,15 +230,21 @@ if __name__ == "__main__":
 
     # import datasets into staging area
     log.info("Importing data into the staging area")
-    with Client(url=os.getenv('EMX2_HOST'),
-                schema=os.getenv('EMX2_HOST_SCHEMA'),
-                token=os.getenv('EMX2_HOST_TOKEN')) as molgenis:
+    with Client(url=os.getenv('MOLGENIS_HOST'),
+                schema=os.getenv('SCHEMA_JOBS'),
+                token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
         molgenis.save_schema(table='Jobs Gpap Api', data=api_run_meta_df)
 
         if api_run_errors:
             molgenis.save_schema(
                 table='Job errors', data=api_run_errors)
+            
+    with Client(url=os.getenv('MOLGENIS_HOST'),
+                schema= os.getenv('SCHEMA_GPAP_SOURCE'),
+                token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
-        molgenis.save_schema(table="Participants", data=participants_df)
-        molgenis.save_schema(table="Experiments", data=experiments_df)
+        asyncio.run(upload_staging_area_data(participants=participants_df,
+                                             experiments=experiments_df,
+                                             client=molgenis))
+    

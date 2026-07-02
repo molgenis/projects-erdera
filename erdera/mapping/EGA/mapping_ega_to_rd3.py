@@ -1,8 +1,12 @@
 """Map the EGA data from the staging area to RD3"""
 
+import asyncio
 import re
-from os import environ
+import os
 import logging
+import shutil
+import zipfile
+from zipfile import ZipFile
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -17,16 +21,16 @@ log = logging.getLogger("Staging Area Mapping")
 def get_staging_area_data(endpoint: str):
     """Retrieve metadata from the staging area (/<staging area>/<endpoint>)"""
     logging.info(f'Retrieving {endpoint} EGA information from staging area')
-    with Client(environ['EMX2_HOST'], token=environ['EMX2_HOST_TOKEN']) as client_ind:
+    with Client(os.environ['MOLGENIS_HOST'], token=os.environ['MOLGENIS_TOKEN']) as client_ind:
         return client_ind.get(
             table=endpoint,
-            schema=environ['EMX2_HOST_SCHEMA'],
+            schema=os.environ['SCHEMA_EGA_SOURCE'],
             as_df=True
         )
     
-def add_resources(client: Client): 
-    """Create resources table based on datasets and studies from the EGA."""
-    ## Add the EGA datasets part of the EGA study as seperate resource entries
+def add_collections(client: Client): 
+    """Create collections table based on datasets and studies from the EGA."""
+    ## Add the EGA datasets part of the EGA study as seperate collection entries
     dataset = get_staging_area_data(endpoint='dataset')[['accession_id', 'title', 'description', \
                                                          'num_samples', 'created_at']]
     dataset = dataset.rename(columns={
@@ -57,7 +61,7 @@ def add_resources(client: Client):
     # add website
     study['website'] = f"https://ega-archive.org/studies/{study_accession_id}"
 
-    # add type of resource
+    # add type
     study['type'] = 'Registry'
 
     # Add number of participants
@@ -68,11 +72,34 @@ def add_resources(client: Client):
     study['child networks'] = ','.join(dataset['id'])
 
     # concat the resources table to include the EGA study and the dataset(s)
-    resources = pd.concat([dataset, study])
+    collections = pd.concat([dataset, study])
 
-    client.save_schema(table='Resources', data=resources)
+    client.save_schema(table='Collections', data=collections)
     return {'dataset_id': dataset_accession_id,
             'study_id': study_accession_id} # return accession IDs
+
+async def upload_files(client: Client, accession_ids: str):
+    """Zip the files and upload to RD3"""
+    # get the files df
+    files = ega_to_files(client=client, accession_ids=accession_ids)
+
+    # create tmp folder for zipped archive
+    tmp_output_path = f'{os.environ['OUTPUT_PATH']}tmp'
+    if not os.path.exists(tmp_output_path):
+        os.makedirs(tmp_output_path)
+    files.to_csv(f'{tmp_output_path}/Files.csv', index=False)
+    
+    # initialise an archive 
+    zip_file_name=f'{tmp_output_path}/archive.zip'
+
+    # zip the data
+    with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
+        my_zip.write(f'{tmp_output_path}/Files.csv', 'Files.csv')
+    # upload the zipped file
+    await client.upload_file(schema=os.environ['MOLGENIS_HOST_SCHEMA_TARGET'], file_path=zip_file_name)
+
+    # delete the tmp folder and its contents
+    shutil.rmtree(tmp_output_path)    
     
 def ega_to_files(client: Client, accession_ids: str):
     """Map file metadata from the EGA staging area to RD3's Files"""
@@ -166,17 +193,16 @@ def ega_to_files(client: Client, accession_ids: str):
     # drop the accession id 
     files = files.drop(columns=['accession_id'])
 
-   # save
-    client.save_schema(table='Files', data=files)
+    # return 
+    return files
     
 if __name__ == "__main__":
 
     db = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['MOLGENIS_TOKEN']
+        os.environ['MOLGENIS_HOST'],
+        schema=os.environ['MOLGENIS_HOST_SCHEMA_TARGET'],
+        token=os.environ['MOLGENIS_TOKEN']
     )
 
-    accession_ids = add_resources(db)
-    ega_to_files(db, accession_ids)
-
+    accession_ids = add_collections(db)
+    asyncio.run(upload_files(client=db, accession_ids=accession_ids))
