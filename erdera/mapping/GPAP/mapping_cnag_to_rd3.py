@@ -108,16 +108,16 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     # upload individuals data to RD3
     client.save_schema(table='Individuals', data=individuals)
 
-def add_incomplete_families_resource(client: Client):
-    """Create a new resource to capture the incomplete families"""
-    resources = pd.DataFrame([{
+def add_incomplete_families_collection(client: Client):
+    """Create a new collection to capture the incomplete families"""
+    collection = pd.DataFrame([{
         'id': 'Incomplete families',
         'name': 'Incomplete families',
         'description': 'Capture incomplete families, these families are missing an index case'
     }])
 
-    # save resources
-    client.save_schema(table='Resources', data=resources)
+    # save collection
+    client.save_schema(table='Collections', data=collection)
 
 def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     """ Map staging area data into the Pedigree members table
@@ -151,7 +151,7 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     pedigree_members = pedigree_members[~pedigree_members['pedigree'].isin(families_wo_index)]
 
     # flag the incomplete families in the Pedigree table 
-    add_incomplete_families_resource(client=client)
+    add_incomplete_families_collection(client=client)
     pedigree = client.get('Pedigree', as_df = True)
     pedigree.loc[pedigree['id'].isin(families_wo_index),
                  'included in resources'] = 'Incomplete families'

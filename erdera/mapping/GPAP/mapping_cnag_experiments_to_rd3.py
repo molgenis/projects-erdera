@@ -24,23 +24,22 @@ def get_staging_area_experiments():
             as_df=True
         )
     
-def add_resources(client: Client):
-    """Adding ERDERA and EMX2 API as resources to RD3. This function should be a part of a setting up script"""
-    resources = pd.DataFrame({
+def add_collections(client: Client):
+    """Adding ERDERA and EMX2 API as collections to RD3. This function should be a part of a setting up script"""
+    collections = pd.DataFrame({
         'id': ['ERDERA','Solve-RD', 'ERDERA_PF1', 'ERDERA_PF2'],
         'name': ['ERDERA', 'Solve-RD', 'ERDERA_PF1', 'ERDERA_PF2'],
         'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases', 'Data freeze 1', 'Data freeze 2']
     })
 
-    # save resources
-    client.save_schema(table='Resources', data=resources)
+    # save collections
+    client.save_schema(table='Collections', data=collections)
 
 def get_mappings_name(rd3_field_name: str):
     """Get the name of the mappings table as it's defined in the ontology mappings schema
     rd3_field_name: (mappings_name, gpap_field_name)"""
     RD3_dict = {
         'library strategy': ('Experiment types', 'library_strategy'),
-        'target enrichment kit': ('Kits', 'kit'),
         'library source': ('Library source','library_source'),
         'tissue type': ('Tissue types', 'tissue'),
         'erns': ('Erns', 'erns')
@@ -152,8 +151,8 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
         })
 
     ## map (sub)projects
-    # get the resources
-    add_resources(client=client)
+    # get the collections
+    add_collections(client=client)
     
     # combine project and subproject from GPAP to included in resources in RD3
     srDNA['tmp'] = np.where(srDNA['project'].str.contains('Solve-RD', na=False), 'Solve-RD', pd.NA) # capture the Solve-RD experiments
