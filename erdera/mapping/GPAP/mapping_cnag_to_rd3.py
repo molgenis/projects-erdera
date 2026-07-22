@@ -1,4 +1,5 @@
 """Mapping GPAP participants data to RD3"""
+from collections import defaultdict
 import logging
 from os import environ
 import ast
@@ -231,7 +232,16 @@ def build_import_consent(client, data: pd.DataFrame):
 def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontology_name: str):
     """Upload the entries that have a mismatch between the name and/or code. """
     # create df of the non-matches for the quality control schema
-    df_mismatches = pd.DataFrame(list(non_matches), columns=['name', 'code'])
+    #df_mismatches = pd.DataFrame(list(non_matches), columns=['name', 'code'])
+
+    df_mismatches = pd.DataFrame(
+    [
+        (naam, code, ids)
+        for (naam, code), ids in non_matches.items()
+    ],
+    columns=["name", "code", "ids"]
+    )
+
     # create a df of the rd3 names and codes
     rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
     # create a df of the non-matches merged with the rd3 names 
@@ -328,7 +338,12 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
     # create a set of the rd3 names and codes
     rd3_data = set(zip(rd3_ontology['name'], rd3_ontology['code']))
     # get the GPAP ontology values that do not have a name and code match in RD3 
-    non_matches = gpap_data - rd3_data
+    # non_matches = {elem[:2] for elem in gpap_data} - rd3_data
+    non_matches = {elem for elem in gpap_data if elem[:2] not in rd3_data}
+
+    grouped = defaultdict(list)
+    for naam, code, id_ in non_matches:
+        grouped[(naam, code)].append(id_)
 
     # check for which gpap cases quality control has taken place
     molgenis = Client(
@@ -351,7 +366,7 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
 
     # upload the mismatches
     upload_non_matches(rd3_data=rd3_data, 
-                       non_matches=non_matches, 
+                       non_matches=grouped, 
                        mapping=mapping, 
                        rd3_ontology_name=rd3_ontology_name)
     # upload the cases where there is no RD3 data
@@ -416,7 +431,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
                 'disease code': code
             })
 
-            diseases_set.add((name, code))
+            diseases_set.add((name, code, report_id))
 
     # convert list to a dataframe
     disease_history = pd.DataFrame(disease_history2)
