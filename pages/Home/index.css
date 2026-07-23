@@ -76,3 +76,37 @@
 .bg-gray-000 {
     background-color: #ffffff;
 }
+
+.data-highlights {
+    list-style: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1em;
+    margin: 1.5em 0;
+    padding: 0;
+}
+
+.data-highlights li {
+    box-sizing: border-box;
+    padding: 0.8em 1em;
+    background-color: white;
+    border-radius: 8px;
+    flex-grow: 1;
+}
+
+.data-highlights li data span {
+    display: block;
+    margin-bottom: 0.15em;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+
+.data-highlights li data::after {
+    content: attr(value);
+    display: block;
+    font-size: 1.8rem;
+    text-align: center;
+}
