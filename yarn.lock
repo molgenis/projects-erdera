@@ -716,7 +716,7 @@ jsdoc-parse@^6.2.5:
     find-replace "^5.0.1"
     sort-array "^5.0.0"
 
-jsdoc-to-markdown@^9.1.3:
+jsdoc-to-markdown@9.1.3:
   version "9.1.3"
   resolved "https://registry.yarnpkg.com/jsdoc-to-markdown/-/jsdoc-to-markdown-9.1.3.tgz#99e5eb08b7990f043d0398aaeea8382b8651bb86"
   integrity sha512-i9wi+6WHX0WKziv0ar88T8h7OmxA0LWdQaV23nY6uQyKvdUPzVt0o6YAaOceFuKRF5Rvlju5w/KnZBfdpDAlnw==
@@ -730,7 +730,7 @@ jsdoc-to-markdown@^9.1.3:
     jsdoc-parse "^6.2.5"
     walk-back "^5.1.1"
 
-jsdoc@^4.0.4, jsdoc@^4.0.5:
+jsdoc@4.0.5, jsdoc@^4.0.4:
   version "4.0.5"
   resolved "https://registry.yarnpkg.com/jsdoc/-/jsdoc-4.0.5.tgz#fbed70e04a3abcf2143dad6b184947682bbc7315"
   integrity sha512-P4C6MWP9yIlMiK8nwoZvxN84vb6MsnXcHuy7XzVOvQoCizWX5JFCBsWIIWKXBltpoRZXddUOVQmCTOZt9yDj9g==
@@ -850,9 +850,9 @@ lightningcss@^1.32.0:
     lightningcss-win32-x64-msvc "1.32.0"
 
 linkify-it@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/linkify-it/-/linkify-it-5.0.0.tgz#9ef238bfa6dc70bd8e7f9572b52d369af569b421"
-  integrity sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ==
+  version "5.0.2"
+  resolved "https://registry.yarnpkg.com/linkify-it/-/linkify-it-5.0.2.tgz#d3be0a693af3da9df3883f1e346a0e97461a8c19"
+  integrity sha512-ONTm2jCMAVZjgQa/Fy1kScXsuOoF5NPTsoFBdE1KVIZ2vAh/r9+Bqo+0jINCBYnavTPQZz38QzFTme79ENoN3Q==
   dependencies:
     uc.micro "^2.0.0"
 
@@ -890,7 +890,7 @@ markdown-it@^14.1.0, markdown-it@~14.1.1:
     punycode.js "^2.3.1"
     uc.micro "^2.1.0"
 
-markdownlint-cli@^0.48.0:
+markdownlint-cli@0.48.0:
   version "0.48.0"
   resolved "https://registry.yarnpkg.com/markdownlint-cli/-/markdownlint-cli-0.48.0.tgz#c59e4f5d91164588ef0aa348a52e7012668083f1"
   integrity sha512-NkZQNu2E0Q5qLEEHwWj674eYISTLD4jMHkBzDobujXd1kv+yCxi8jOaD/rZoQNW1FBBMMGQpuW5So8B51N/e0A==
@@ -908,7 +908,7 @@ markdownlint-cli@^0.48.0:
     smol-toml "~1.6.0"
     tinyglobby "~0.2.15"
 
-markdownlint@^0.40.0, markdownlint@~0.40.0:
+markdownlint@0.40.0, markdownlint@~0.40.0:
   version "0.40.0"
   resolved "https://registry.yarnpkg.com/markdownlint/-/markdownlint-0.40.0.tgz#1c6e29385f810f0b860f0af4866208e572bd8c59"
   integrity sha512-UKybllYNheWac61Ia7T6fzuQNDZimFIpCg2w6hHjgV1Qu0w1TV0LlSgryUGzM0bkKQCBhy2FDhEELB73Kb0kAg==
@@ -1275,7 +1275,7 @@ postcss@^8.5.8:
     picocolors "^1.1.1"
     source-map-js "^1.2.1"
 
-prettier@^3.8.3:
+prettier@3.8.3:
   version "3.8.3"
   resolved "https://registry.yarnpkg.com/prettier/-/prettier-3.8.3.tgz#560f2de55bf01b4c0503bc629d5df99b9a1d09b0"
   integrity sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==
@@ -1484,7 +1484,7 @@ underscore@~1.13.2:
   optionalDependencies:
     fsevents "~2.3.3"
 
-vitest@^4.1.4:
+vitest@4.1.4:
   version "4.1.4"
   resolved "https://registry.yarnpkg.com/vitest/-/vitest-4.1.4.tgz#330a3798ce307f88d3eea373e61a5f14da8f3bb1"
   integrity sha512-tFuJqTxKb8AvfyqMfnavXdzfy3h3sWZRWwfluGbkeR7n0HUev+FmNgZ8SDrRBTVrVCjgH5cA21qGbCffMNtWvg==
