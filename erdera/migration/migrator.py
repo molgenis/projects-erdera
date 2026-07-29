@@ -114,7 +114,10 @@ def get_staging_areas(client: Client):
     ]
     return schemas
 
-if __name__ == '__main__':
+def publish_all():
+    """
+    Publish all data from the staging areas to the production RD3 database
+    """
     #client = Client(url=SERVER_URL, token=TOKEN, job="${jobId}") # use when running the script on a server
     client = Client(url=SERVER_URL, token=TOKEN) # use when running the script locally
 
@@ -129,3 +132,6 @@ if __name__ == '__main__':
             print("An error occurred.")
             log.error(e)
     client.session.close()
+
+if __name__ == '__main__':
+    publish_all()
