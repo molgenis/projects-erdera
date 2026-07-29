@@ -2,7 +2,7 @@
 
 The migrator publishes ERDERA data from the staging areas to the production RD3 database. 
 
-The script processes al schemas named `Staging area <_institute_>`, with the exception of `Staging area GPAP`, `Staging area EGA`, and `Staging area ids`. 
+The script processes al schemas named `Staging area <institute>`, with the exception of `Staging area GPAP`, `Staging area EGA`, and `Staging area ids`. 
 
 For each staging area, the data is exported and filtered to remove molgenis-related and empty files, leaving only the submitted data. If any draft records are detected, the migration for that staging area is skipped and a message is logged. 
 
@@ -35,7 +35,7 @@ To use this script in your emx2 instance, follow these steps.
 1. Go to the server where you want to deploy the script.
 2. Go to the `scripts` overview and create a new script.
 3. Copy the contents of the [Migrator script](migrator.py) into the script field.
-4. Add the following dependencies: 
+4. Add the following dependencies.
 ```txt
 molgenis_emx2_pyclient
 pandas
