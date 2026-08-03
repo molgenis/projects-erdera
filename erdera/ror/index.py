@@ -1,18 +1,25 @@
-"""Compile the organisations ontology table using ROR API
-# FILE: ror.py
-# AUTHOR: David Ruvolo
-# CREATED: 2024-10-02
-# MODIFIED: 2026-08-03
-# PURPOSE: pull metadata from ROR by ROR ID
-# STATUS: stable
-# PACKAGES: **see below**
-# COMMENTS: NA
+"""Create dataset for the CatalogueOntologies Organisations table
+
+To use, find the IDs that correspond to the ROR organisation and paste them below.
+
+Example:
+
+```py
+ids_to_map = ['https://ror.org/03cv38k47', 'https://ror.org/012p63287']
+main(rorIDs=ids_to_map)
+```
+
+Run the script to retrieve data from ROR. A csv file will be generated containing
+the ROR metadata. Move the file into the appropriate location and rename (if applicable).
+Import the file into the CatalogueOntologies schema.
+
+NOTE: you may need to fix the country mappings as both systems use different terminologies
+
 """
 
 import requests
 import pandas as pd
 from tqdm import tqdm
-
 
 # use for coding ROR countries to MOLGENIS countries
 COUNTRY_MAPPINGS = {
@@ -54,11 +61,11 @@ def main(rorIDs: list[str]):
     client = RorClient()
 
     dataset = []
-    for rorId in tqdm(rorIDs):
-        data = client.get_org(ror_id=rorId)
+    for ror_id in tqdm(rorIDs):
+        data = client.get_org(ror_id=ror_id)
 
         new_entry = {
-            'ontologyTermURI': rorId,
+            'ontologyTermURI': ror_id,
             'codesystem': 'ROR'
         }
 
@@ -85,7 +92,6 @@ def main(rorIDs: list[str]):
         # set geodata
         if data.get('locations'):
             for location in data['locations']:
-                print(location)
                 if 'geonames_details' in location:
                     geonames = location['geonames_details']
                     new_entry['city'] = geonames.get(
