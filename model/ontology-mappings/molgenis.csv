@@ -7,7 +7,9 @@ Gpap,,incoming code,string,,,,The external code of the value,,
 Age of onset,Gpap,,,,,,Onset to age group at onsent,,
 Age of onset,,new value,ontology,,,,The value that the external value should be mapped to,CatalogueOntologies,Age groups at onset
 Erns,Gpap,,,,,,ERNs extracted from GPAP,,
-Erns,,new value,ontology,,,,The value that the external value should be mapped to,CatalogueOntologies,Organisations
+Erns,,new value,select,,,,The value that the external value should be mapped to,CatalogueOntologies,Organisations
+Organisations,Gpap,,,,,,The GPAP organisations,,
+Organisations,,new value,select,,,,The parent organisation (the ROR organisation),CatalogueOntologies,Organisations
 Experiment types,Gpap,,,,,,Experiment type to Sequencing method mappings,,
 Experiment types,,new value,ontology,,,,The value that the external value should be mapped to,CatalogueOntologies,Sequencing methods
 Gender at birth,Gpap,,,,,,Sex to gender at birth mappings,,
