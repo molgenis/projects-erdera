@@ -113,7 +113,7 @@ def main(rorIDs: list[str]):
 
         # add to dataset
         dataset.append(new_entry)
-    pd.DataFrame(dataset).to_csv('ror_organisations.csv', index=False)
+    pd.DataFrame(dataset).to_csv('model/lookups/ror_organisations.csv', index=False)
 
 
 if __name__ == '__main__':
