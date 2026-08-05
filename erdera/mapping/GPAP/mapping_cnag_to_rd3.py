@@ -71,7 +71,7 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         )
             
     # upload
-    client.save_schema(table='Pedigree', data=pedigree)
+    client.save_table(table='Pedigree', data=pedigree)
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
@@ -106,18 +106,19 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     individuals['age at enrolment'] = "P" + age.astype('Int64').astype('string') + "Y"
 
     # upload individuals data to RD3
-    client.save_schema(table='Individuals', data=individuals)
+    client.save_table(table='Individuals', data=individuals)
 
 def add_incomplete_families_collection(client: Client):
     """Create a new collection to capture the incomplete families"""
     collection = pd.DataFrame([{
         'id': 'Incomplete families',
         'name': 'Incomplete families',
+        'type': 'Other type',
         'description': 'Capture incomplete families, these families are missing an index case'
     }])
 
     # save collection
-    client.save_schema(table='Collections', data=collection)
+    client.save_table(table='Collections', data=collection)
 
 def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     """ Map staging area data into the Pedigree members table
@@ -155,7 +156,7 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     pedigree = client.get('Pedigree', as_df = True)
     pedigree.loc[pedigree['id'].isin(families_wo_index),
                  'included in resources'] = 'Incomplete families'
-    client.save_schema(table='Pedigree', data=pedigree) # upload with updated field 
+    client.save_table(table='Pedigree', data=pedigree) # upload with updated field 
 
     # remove the index column
     pedigree_members = pedigree_members.drop(columns={'index'})
@@ -169,7 +170,7 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
         affected_dict)
 
     # upload
-    client.save_schema(table = 'Pedigree members', data = pedigree_members)
+    client.save_table(table = 'Pedigree members', data = pedigree_members)
 
 def build_import_clinical_observations(client, data: pd.DataFrame):
     """Map staging area data into the clinical observations table"""
@@ -202,7 +203,7 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
     client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])    
     
     # then upload
-    client.save_schema(table='Clinical observations',
+    client.save_table(table='Clinical observations',
                        data=clinical_observations)
 
 
@@ -226,7 +227,7 @@ def build_import_consent(client, data: pd.DataFrame):
     # first truncate the consent table
     client.truncate(table='Individual consent', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
     # then upload
-    client.save_schema(table='Individual consent', data=indv_consent)
+    client.save_table(table='Individual consent', data=indv_consent)
 
 def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontology_name: str):
     """Upload the entries that have a mismatch between the name and/or code. """
@@ -266,7 +267,7 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontol
     )
 
     # upload the mismatches
-    molgenis.save_schema(data=quality_control_upload, table=rd3_ontology_name)
+    molgenis.save_table(data=quality_control_upload, table=rd3_ontology_name)
 
 def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapping: dict):
     """Check if there is no RD3 match for the data entry"""
@@ -304,7 +305,7 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
                   .drop(columns='_merge'))
 
     # save the df
-    molgenis.save_schema(data=missing_df, table=rd3_ontology_name)
+    molgenis.save_table(data=missing_df, table=rd3_ontology_name)
 
 def match_phenotypes(gpap_data: set):
     """Wrapper function to match the phenotypes"""
@@ -463,8 +464,8 @@ def build_import_disease_history(client, data: pd.DataFrame):
 
     # upload the data
     client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET']) # first truncate in order to update (to prevent duplicates)
-    client.save_schema(table='Clinical observations', data=clinical_obs)
-    client.save_schema(table='Disease history', data=disease_history.drop_duplicates())
+    client.save_table(table='Clinical observations', data=clinical_obs)
+    client.save_table(table='Disease history', data=disease_history.drop_duplicates())
 
 def parse_entries(entries):
     """
@@ -551,7 +552,6 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
 
     # map the phenotypic features from GPAP format to RD3
     non_matches, mappings = match_phenotypes(observations)
-
     phen_observations['key'] = list(zip(phen_observations['type'], phen_observations['phenotype code']))
 
     # map the corrections
@@ -577,7 +577,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
     phen_observations = phen_observations.drop(columns=['phenotype code', 'key'])
 
     # upload
-    client.save_schema(table='Phenotype observations',
+    client.save_table(table='Phenotype observations',
                        data=phen_observations.drop_duplicates())
 
 if __name__ == "__main__":
