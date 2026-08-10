@@ -32,8 +32,10 @@ def add_collections(client: Client):
         'description': ['European Rare Diseases Research Alliance', 'Solving the Unsolved Rare Diseases', 'Data freeze 1', 'Data freeze 2']
     })
 
+    collections['type'] = 'Registry'
+
     # save collections
-    client.save_schema(table='Collections', data=collections)
+    client.save_table(table='Collections', data=collections)
 
 def get_mappings_name(rd3_field_name: str):
     """Get the name of the mappings table as it's defined in the ontology mappings schema
@@ -42,12 +44,14 @@ def get_mappings_name(rd3_field_name: str):
         'library strategy': ('Experiment types', 'library_strategy'),
         'library source': ('Library source','library_source'),
         'tissue type': ('Tissue types', 'tissue'),
-        'erns': ('Erns', 'erns')
+        'erns': ('Erns', 'erns'),
+        'organisations': ('Organisations', 'Owners')
     }
     return RD3_dict.get(rd3_field_name)
 
 def get_data(rd3_name: str):
     '''Get the mappings data'''
+
     mappings_name = get_mappings_name(rd3_name)[0]
    
     with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
@@ -81,32 +85,57 @@ def match_ontology(gpap_data: list):
     )
 
     # upload the values without a match to the ontology mappings schema
-    molgenis.save_schema(table=get_mappings_name(gpap_data.name)[0], data=unmatched_df)
+    molgenis.save_table(table=get_mappings_name(gpap_data.name)[0], data=unmatched_df)
     
     return mappings_dict, unmatched
 
-def map_owner_to_organisation(owners: list):
+def map_owner_to_organisation(srDNA: pd.DataFrame):
     """Upload the GPAP owners as organisations in CatalogueOntologies"""
-    ontologies_client = Client(
+    client = Client(
         environ['MOLGENIS_HOST'],
-        schema=environ['SCHEMA_ONTOLOGIES'],
+        #schema=environ['SCHEMA_ONTOLOGIES'],
         token=environ['MOLGENIS_TOKEN']
     )
 
-    organisations = ontologies_client.get(
+    organisations = client.get(
         table='Organisations', 
         schema=environ['SCHEMA_ONTOLOGIES'],
         as_df=True)
     
+    # get the mappings of the organisations
+    organisations_mappings = dict(zip(get_data('organisations')['incoming value'], get_data('organisations')['new value']))
+
+    owners = srDNA['Owner'].unique().tolist() # gather all unique owners as a list 
+    
     # get the new organisations 
     new_organisations = [owner for owner in owners if owner not in organisations['name'].to_list()]
-    
+
+    # for each new gpap owner, the rd3 organisations needs to be mapped, 
+    # additionally, they need to be linked to each other. 
     new_organisations_df = pd.DataFrame({'name': new_organisations})
+    new_organisations_df['parent'] = new_organisations_df['name'].map(organisations_mappings) # link the official ror ontology as parent
+    # add the 'parent' (i.e., the official ror organisation) to the df
+    srDNA['parent_owner'] = srDNA['Owner'].map(organisations_mappings)
 
     # upload the new organisations 
-    ontologies_client.save_schema(table='Organisations', 
-                                  data=new_organisations_df)
-    
+    client.save_table(table='Organisations',
+                      schema=environ['SCHEMA_ONTOLOGIES'],
+                      data=new_organisations_df)
+
+    # upload the new organisation to ontology mappings
+    new_organisations_df = new_organisations_df.rename(columns={
+        'name': 'incoming value',
+        'parent': 'new value'
+    })
+    new_organisations_df['source'] = 'Owner'
+    client.save_table(
+        table='Organisations',
+        schema=environ['SCHEMA_ONTOLOGY_MAPPINGS'],
+        data=new_organisations_df
+    )
+
+    return srDNA
+   
 def upload_samples(client: Client, data: pd.DataFrame):
     """Build and import the sample metadata based on GPAP's experiments. """
 
@@ -128,7 +157,7 @@ def upload_samples(client: Client, data: pd.DataFrame):
     samples_srDNA = samples_srDNA.drop(tmp, axis=0)
 
     # upload samples
-    client.save_schema(table='Samples srDNA', data=samples_srDNA)
+    client.save_table(table='Samples srDNA', data=samples_srDNA)
     
 def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     """This function maps GPAP experiments to srDNA experiments in RD3"""
@@ -189,8 +218,7 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     srDNA = srDNA.drop(tmp, axis=0)
 
     ## map affiliated organisations based on erns and owner columns
-    owners = srDNA['Owner'].unique().tolist() # gather all unique owners as a list 
-    map_owner_to_organisation(owners=owners) # upload the owners as organisations
+    srDNA = map_owner_to_organisation(srDNA=srDNA) # upload the owners as organisations
 
     field_name = 'erns'
     matches, unmatched = match_ontology(gpap_data=srDNA[field_name])
@@ -205,8 +233,9 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     for index, row in srDNA.iterrows():
         erns = row['erns']
         owner = row['Owner']
+        parent = row['parent_owner']
         if not pd.isna(erns):
-            srDNA.loc[index, 'affiliated organisations'] = ','.join(str(field) for field in [erns, owner] if pd.notna(field))
+            srDNA.loc[index, 'affiliated organisations'] = ','.join(str(field) for field in [erns, owner, parent] if pd.notna(field))
     add_organisations_to_individuals(client=client, ind_org_dict=dict(zip(srDNA['individuals'], srDNA['affiliated organisations'])))
 
     # remove erns and owner columns
@@ -219,13 +248,13 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     srDNA['sample'] = srDNA['id']
     
     # upload the experiments
-    client.save_schema(table='Experiments srDNA', data=srDNA)
+    client.save_table(table='Experiments srDNA', data=srDNA)
 
 def add_organisations_to_individuals(client: Client, ind_org_dict: dict):
     """Add the submitting organisations to the individuals table"""
     individuals = client.get(table='Individuals', as_df=True)
     individuals['affiliated organisations'] = individuals['id'].map(ind_org_dict)
-    client.save_schema(table='Individuals', data=individuals)
+    client.save_table(table='Individuals', data=individuals)
 
 if __name__ == "__main__":
 

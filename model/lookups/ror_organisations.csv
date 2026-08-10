@@ -1,0 +1,40 @@
+ontologyTermURI,codesystem,name,acronym,website,city,latitude,longitude,country,type
+https://ror.org/03cv38k47,ROR,University Medical Center Groningen,UMCG,https://www.umcg.nl,Groningen,53.21917,6.56667,Netherlands (the),"funder,healthcare"
+https://ror.org/012p63287,ROR,University of Groningen,,https://www.rug.nl,Groningen,53.21917,6.56667,Netherlands (the),"education,funder"
+https://ror.org/03a1kwz48,ROR,University of Tübingen,,https://www.uni-tuebingen.de/en/university.html,Baden-Wurttemberg,48.52266,9.05222,Germany,"education,funder"
+https://ror.org/03z77qz90,ROR,University of Tartu,UT,https://ut.ee,Tartu,58.38062,26.72509,Estonia,"education,funder"
+https://ror.org/05wg1m734,ROR,Radboud University Medical Center,RUNMC,https://www.radboudumc.nl,Gelderland,51.8425,5.85278,Netherlands (the),"funder,healthcare"
+https://ror.org/013czdx64,ROR,University Hospital Heidelberg,,https://www.klinikum.uni-heidelberg.de/Startseite.2.0.html?&no_cache=1,Baden-Wurttemberg,49.40768,8.69079,Germany,"funder,healthcare"
+https://ror.org/05xvt9f17,ROR,Leiden University Medical Center,LUMC,https://www.lumc.nl,South Holland,52.15833,4.49306,Netherlands (the),"funder,healthcare"
+https://ror.org/01n2xwm51,ROR,Meyer Children's Hospital,,http://www.meyer.it/index.php/en/,Tuscany,43.77925,11.24626,Italy,healthcare
+https://ror.org/05bd7c383,ROR,St. Anna Children's Cancer Research Institute,CCRI,https://ccri.at,Vienna,48.20849,16.37208,Austria,nonprofit
+https://ror.org/03ccx3r49,ROR,Centogene (Germany),,https://www.centogene.com/,Mecklenburg-Vorpommern,54.0887,12.14049,Germany,company
+https://ror.org/0377z4z10,ROR,CHU Dijon Bourgogne,,https://www.chu-dijon.fr,Bourgogne-Franche-Comté,47.31667,5.01667,France,healthcare
+https://ror.org/018906e22,ROR,Erasmus MC,,https://www.erasmusmc.nl,South Holland,51.9225,4.47917,Netherlands (the),"funder,healthcare"
+https://ror.org/04n6j6456,ROR,Izmir Biomedicine and Genome Center,IBG;İBG,https://www.ibg.edu.tr,İzmir Province,38.41273,27.13838,Turkey,"funder,government"
+https://ror.org/02jzt6t86,ROR,Institute of Human Genetics,,https://igcz.poznan.pl/,Greater Poland,52.40692,16.92993,Poland,facility
+https://ror.org/00ca2c886,ROR,Instituto de Salud Carlos III,ISCIII,https://www.isciii.es,Madrid,40.4165,-3.70256,Spain,"funder,nonprofit"
+https://ror.org/05f950310,ROR,KU Leuven,KUL,https://www.kuleuven.be,Flanders,50.87959,4.70093,Belgium,"education,funder"
+https://ror.org/01n9zy652,ROR,Medical University of Sofia,,http://www.mu-sofia.bg/,Sofia-Capital,42.69751,23.32415,Bulgaria,"education,funder"
+https://ror.org/0125yxn03,ROR,University Hospital in Motol,,https://www.fnmotol.cz,Prague,50.08804,14.42076,Czechia,healthcare
+https://ror.org/03wed5r38,ROR,Eginition Hospital,,http://www.eginitionhosp.com/,Attica,37.98376,23.72784,Greece,healthcare
+https://ror.org/01hxy9878,ROR,Royal College of Surgeons in Ireland,RCSI,https://www.rcsi.com,Leinster,53.33306,-6.24889,Ireland,"education,funder"
+https://ror.org/02kqnpp86,ROR,"University of Campania ""Luigi Vanvitelli""",,https://unina2.it,Campania,41.07262,14.33231,Italy,"education,funder"
+https://ror.org/00dr28g20,ROR,University of Crete,UOC,https://www.uoc.gr,Crete,35.32787,25.14341,Greece,"education,funder"
+https://ror.org/00cv9y106,ROR,Ghent University,,https://www.ugent.be,Flanders,51.05,3.71667,Belgium,"education,funder"
+https://ror.org/008x57b05,ROR,University of Antwerp,,https://www.uantwerpen.be/en/,Flanders,51.22047,4.40026,Belgium,"education,funder"
+https://ror.org/01tevnk56,ROR,University of Siena,UNISI,https://www.unisi.it,Tuscany,43.31822,11.33064,Italy,"education,funder"
+https://ror.org/041x7eh14,ROR,VIB-UAntwerp Center for Molecular Neurology,CMN,https://uantwerpen.vib.be/,Flanders,51.22047,4.40026,Belgium,facility
+https://ror.org/00zam0e96,ROR,Institute of Pathology and Genetics,IPG,http://www.ipg.be,Wallonia,50.41136,4.44448,Belgium,nonprofit
+https://ror.org/05nsbhw27,ROR,Children's Hospital of Eastern Ontario,CHEO,http://www.cheo.on.ca/,Ontario,45.41117,-75.69812,Canada,healthcare
+https://ror.org/013meh722,ROR,University of Cambridge,,https://www.cam.ac.uk,England,52.2,0.11667,United Kingdom of Great Britain and Northern Ireland (the),"education,funder"
+https://ror.org/01gckhp53,ROR,Latvian Biomedical Research and Study Centre,BMC,http://biomed.lu.lv/en/,Riga,56.946,24.10589,Latvia,facility
+https://ror.org/00t3r8h32,ROR,University of Lübeck,,http://www.uni-luebeck.de/,Schleswig-Holstein,53.86893,10.68729,Germany,"education,funder"
+https://ror.org/05j1gs298,ROR,Erasmus Hospital,,http://www.erasme.ulb.ac.be/page.asp?id=13338&langue=EN,Brussels Capital,50.85045,4.34878,Belgium,healthcare
+https://ror.org/05jmd4043,ROR,Hospital Universitario Son Espases,,http://www.hospitalsonespases.es/index.php?lang=ca,Balearic Islands,39.56939,2.65024,Spain,healthcare
+https://ror.org/01jmxt844,ROR,University of Otago,,http://www.otago.ac.nz/,Otago,-45.87416,170.50361,New Zealand,"education,funder"
+https://ror.org/00ss42h10,ROR,Riga East University Hospital,,https://www.aslimnica.lv/,Riga,56.946,24.10589,Latvia,healthcare
+https://ror.org/05g2amy04,ROR,Acıbadem Adana Hospital,,http://www.acibadem.com/en/,Adana,36.98615,35.32531,Turkey,healthcare
+https://ror.org/0590pq693,ROR,Vilnius University Hospital Santariskiu Klinikos,,https://www.santa.lt,Vilnius,54.68916,25.2798,Lithuania,healthcare
+https://ror.org/01d5vx451,ROR,Vall d'Hebron Institut de Recerca,VHIR;VHIR-CERCA,https://vhir.vallhebron.com,Catalonia,41.38879,2.15899,Spain,facility
+https://ror.org/01kj2bm70,ROR,Newcastle University,,https://www.ncl.ac.uk,England,54.97328,-1.61396,United Kingdom of Great Britain and Northern Ireland (the),"education,funder"
