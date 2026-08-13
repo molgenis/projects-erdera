@@ -14,6 +14,11 @@ data into the Users.Schemas table.
 
 You can also run this script locally manually setting the `MOLGENIS_TOKEN`
 
+## Requirements (copy into the script editor)
+
+requests
+pandas
+
 """
 import os
 import sys
