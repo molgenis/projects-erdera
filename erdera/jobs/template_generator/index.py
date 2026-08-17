@@ -296,7 +296,7 @@ class BuildTemplate:
             excluded_types = ['SECTION', 'HEADING', 'REFBACK']
             col_meta = [
                 col for col in table_meta.columns
-                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible')
+                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible') and not col.name == 'id'
             ]
 
             self.build_sheet(workbook=workbook,
