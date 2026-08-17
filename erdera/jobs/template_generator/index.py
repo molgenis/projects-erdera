@@ -4,11 +4,14 @@ from os import environ
 import sys
 import logging
 from typing import TypedDict
+
 import xlsxwriter
 from openpyxl.utils.cell import get_column_letter
+
 from molgenis_emx2_pyclient import Client
 from molgenis_emx2_pyclient.metadata import Schema, Table, Column
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.captureWarnings(True)
@@ -23,7 +26,7 @@ if environ.get('MOLGENIS_HOST'):
     HOST = environ['MOLGENIS_HOST']
 
 # init template builder params
-SCHEMA: str = None  # rd3
+SCHEMA: str = 'RD3' # rd3
 TABLES: list[str] = []
 
 # process args: must send as a string separated with a ";"
@@ -166,54 +169,94 @@ class BuildTemplate:
                 column=column) and ontology_table is not None
 
             if should_build_ontology:
-                log.info('Creating lookup from %s', ontology_table)
-                self.should_build_lookup_sheet = True
-                ontology_schema: str = self.schema
-
-                if bool(column.get('refSchemaId')):
-                    ontology_schema = column.refSchemaId
-
-                query_filter: str = ''
-                if ontology_table in [
-                    'Concentration measurement type',
-                    'File formats',
-                    'Movietime',
-                    'Sample type',
-                    'Sequencing instrument models',
-                    'Sequencing methods',
-                    'Storage buffer',
-                    'Storage conditions',
-                    'Tissue type',
-                    'Library source',
-                    'Sequencing platforms',
-                    'Units',
-                    'Concentration measurement type',
-                    'Library layout'
-                ]:
-                    query_filter = 'tags=="erdera"'
-                    if ONTOLOGY_TAG != "":
-                        query_filter = f"tags=='{ONTOLOGY_TAG}'"
-
-                data = client.get(
-                    table=ontology_table,
-                    columns=['name'],
-                    query_filter=query_filter,
-                    schema=ontology_schema)
-
                 lookups_col: str = get_column_letter(self.lookups_col_index+1)
-                lookup = {
+                lookups_col_index = self.lookups_col_index
+                lookup = next( # if lookup is already created, use this information
+                    (elem for elem in self.lookups 
+                     if elem['name'] == ontology_table), 
+                     None)
+                if lookup:
+                    # get column letter and set template col to this range 
+                    lookups_col = lookup['lookups_col']
+                    lookups_col_index = lookup['lookups_col_index']
+                    data = lookup['data']
+                else: # if not, create the lookup list
+                    log.info('Creating lookup from %s', ontology_table)
+                    self.lookups_col_index += 1
+                    self.should_build_lookup_sheet = True
+                    ontology_schema: str = self.schema
+
+                    if bool(column.get('refSchemaId')):
+                        ontology_schema = column.refSchemaId
+
+                    query_filter: str = ''
+                    if ontology_table in [
+                        'Concentration measurement type',
+                        'File formats',
+                        'Movietime',
+                        'Sample type',
+                        'Sequencing instrument models',
+                        'Sequencing methods',
+                        'Storage buffer',
+                        'Storage conditions',
+                        'Tissue type',
+                        'Library source',
+                        'Sequencing platforms',
+                        'Units',
+                        'Library layout'
+                    ]:
+                        query_filter = 'tags=="erdera"'
+                        if ONTOLOGY_TAG != "":
+                            query_filter = f"tags=='{ONTOLOGY_TAG}'"
+
+                    data = client.get(
+                        table=ontology_table,
+                        columns=['name'],
+                        query_filter=query_filter,
+                        schema=ontology_schema)
+
+                lookup = { # create lookup entry
                     'name': ontology_table,
                     'data': list(data),
                     'lookups_col': lookups_col,
-                    'lookups_col_index': self.lookups_col_index,
+                    'lookups_col_index': lookups_col_index,
                     'template_sheet': sheet_name,
                     'template_col': get_column_letter(index+1),
                     'template_col_index': index,
                     'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)+1}"
                 }
-                # print(lookup)
                 self.lookups.append(lookup)
-                self.lookups_col_index += 1
+            
+            # determine if column is a boolean
+            is_bool: bool = column.get('columnType') == 'BOOL'
+            # get the lookup column and index
+            lookups_col: str = get_column_letter(self.lookups_col_index+1)
+            lookups_col_index = self.lookups_col_index
+            if is_bool:
+                lookup = next(
+                    (elem for elem in self.lookups 
+                     if elem['name'] == 'Boolean'), 
+                     None)
+                # if there is already an boolean lookup, get the data (i.e., lookup col and index)
+                if lookup:
+                    # get column letter and set template col to this range 
+                    lookups_col = lookup['lookups_col']
+                    lookups_col_index = lookup['lookups_col_index']
+                else: # only increment index if lookup is created for the boolean (first time) 
+                    self.lookups_col_index += 1
+                
+                lookup = { # create lookup
+                    'name': 'Boolean',
+                    'data': [{'name':True}, {'name':False}],
+                    'lookups_col': lookups_col,
+                    'lookups_col_index': lookups_col_index,
+                    'template_sheet': sheet_name,
+                    'template_col': get_column_letter(index+1),
+                    'template_col_index': index,
+                    'formula': f"=lookups!{lookups_col}2:{lookups_col}3"
+                }
+                self.lookups.append(lookup)
+                
 
             # iterate over rows in the sheet: apply styles and/or validation
             if self.column_is_required(column=column):
@@ -259,25 +302,29 @@ class BuildTemplate:
             self.build_sheet(workbook=workbook,
                              sheet_name=table,
                              column_metadata=col_meta,
+                             #column_metadata=[col_meta[index] for index in [9,23]],
                              styles=styles)
 
         # only build lookups if present in the model
         if self.should_build_lookup_sheet:
             lookups_sheet = workbook.add_worksheet(name='lookups')
+            written_columns = set() # to keep track of the lookup lists written to the lookups sheet
             for lookup in self.lookups:
-                log.info(
-                    'Creating lookup and apply validation rules for %s', lookup['name'])
-                lookups_sheet.write(
-                    0,
-                    lookup['lookups_col_index'],
-                    lookup['name'],
-                    styles['header_default'])
-
-                # write ontology terms
-                for index, row in enumerate(lookup['data']):
+                if lookup['lookups_col_index'] not in written_columns:
+                    log.info('Creating lookup and apply validation rules for %s', lookup['name'])
                     lookups_sheet.write(
-                        index+1, lookup['lookups_col_index'], f"{row['name']}")
+                        0,
+                        lookup['lookups_col_index'],
+                        lookup['name'],
+                        styles['header_default'])
 
+                    # write ontology terms
+                    for index, row in enumerate(lookup['data']):
+                        lookups_sheet.write(
+                            index+1, lookup['lookups_col_index'], f"{row['name']}")
+                    written_columns.add(lookup['lookups_col_index'])
+
+                # apply validation always (also for the duplicate lookups)
                 # apply validation in the appropriate sheet
                 template_sheet = workbook.get_worksheet_by_name(
                     lookup['template_sheet'])
