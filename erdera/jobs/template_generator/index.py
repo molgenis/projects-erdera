@@ -4,6 +4,7 @@ from os import environ
 import sys
 import logging
 from typing import TypedDict
+import textwrap
 
 import xlsxwriter
 from openpyxl.utils.cell import get_column_letter
@@ -26,7 +27,7 @@ if environ.get('MOLGENIS_HOST'):
     HOST = environ['MOLGENIS_HOST']
 
 # init template builder params
-SCHEMA: str = 'RD3' # rd3
+SCHEMA: str = None # rd3
 TABLES: list[str] = []
 
 # process args: must send as a string separated with a ";"
@@ -107,6 +108,30 @@ class BuildTemplate:
             is_req = False
         return is_key or is_req
 
+    def rewrite_col_type(self,
+                         column: Column):
+        """
+        Update the columnType to make its meaning clearer
+        """
+        columnType = column.get('columnType')
+        refTableName = column.get('refTableName')
+        if not columnType:
+            columnType = 'STRING'
+        elif columnType == 'DATE':
+            columnType = 'DATE (yyyy-mm-dd)'
+        elif columnType == 'STRING_ARRAY':
+            columnType = 'STRING_ARRAY (multiple answers allowed)'
+        elif columnType in ['ONTOLOGY', 'SELECT']:
+            columnType = f'{refTableName}: Select one item'
+        elif columnType in ['ONTOLOGY_ARRAY', 'MULTISELECT']:
+            columnType = f'{refTableName}: Select multiple items'
+        elif columnType == 'INT':
+            columnType = 'INTEGER'
+        elif columnType in ['BOOL']:
+            return
+        
+        return columnType
+        
     def write_sheet_header(self,
                            sheet,
                            column: Column,
@@ -129,15 +154,42 @@ class BuildTemplate:
 
         sheet.write(0, col_index, column.name, current_header_style)
 
-    def column_is_ontology_type(self, column: Column) -> bool:
-        """Determine if the column is ONTOLOGY or ONTOLOGY_ARRAY"""
-        return column.columnType.startswith('ONTOLOGY')
+        # add comment which will appear when hovered over the field
+        columnType = self.rewrite_col_type(column=column)
+        description = column.get('description')
+
+        # comment text based on description and column type
+        comment_text = f'{description}'
+        if columnType:
+            comment_text = f'{description} \n\n {columnType}'    
+
+        # format comment
+        width = 200
+        # wrap the text to prevent text from falling outside the comment box
+        wrap_at = 40
+        wrapped_lines = []
+        for line in comment_text.split("\n"):
+            wrapped_lines.extend(textwrap.wrap(line, width=wrap_at))
+        comment_text = "\n".join(wrapped_lines)
+        # set height of comment box
+        height = max(20, len(wrapped_lines) * 15)
+
+        # write comment
+        sheet.write_comment(0, col_index, comment_text,
+                            {
+                                'width': width,
+                                'height': height
+                            })
+
+    def column_is_ontology_type_or_ref_to_orgs(self, column: Column) -> bool:
+        """Determine if the column is ONTOLOGY, ONTOLOGY_ARRAY, or a reference to Organisations"""
+        return column.columnType.startswith('ONTOLOGY') or column.get('refTableName') == 'Organisations'
 
     def table_has_ontology_types(self, table_meta: Table) -> bool:
         """Determine if there are ONTOLOGY types in a table"""
         count: int = 0
         for column in table_meta:
-            if self.column_is_ontology_type(column=column):
+            if self.column_is_ontology_type_or_ref_to_orgs(column=column):
                 count += 1
         return count > 0
 
@@ -165,7 +217,7 @@ class BuildTemplate:
 
             # determine if ontology table is present
             ontology_table: str = column.get('refTableName')
-            should_build_ontology: bool = self.column_is_ontology_type(
+            should_build_ontology: bool = self.column_is_ontology_type_or_ref_to_orgs(
                 column=column) and ontology_table is not None
 
             if should_build_ontology:
