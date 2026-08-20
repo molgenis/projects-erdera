@@ -267,6 +267,7 @@ class BuildTemplate:
                         query_filter=query_filter,
                         schema=ontology_schema)
 
+                data = data.sort(key=lambda x: x['name'].lower())
                 lookup = { # create lookup entry
                     'name': ontology_table,
                     'data': list(data),
