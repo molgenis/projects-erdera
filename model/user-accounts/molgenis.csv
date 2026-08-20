@@ -1,0 +1,25 @@
+tableName,tableType,tableExtends,columnName,columnType,key,required,refSchema,refTable,refBack,visible,ontologyTermURI,description
+Users,,,,,,,,,,,,A record of all users and their access levels
+Users,,,User information,Heading,,,,,,,,General information about the user
+Users,,,email,email,1,TRUE,,,,,obo:NCIT_C42775,A text string identifier for a location to which e-mail can be delivered.
+Users,,,first name,string,,,,,,,obo:NCIT_C40974,A word or group of words indicating a person's first (personal or given) name; the name that precedes the surname.
+Users,,,last name,string,,,,,,,obo:NCIT_C40975,A word or group of words indicating a person's last (family) name.
+Users,,,affiliation,select,,,CatalogueOntologies,Organisations,,,obo:NCIT_C25412,One or more associations between the individual and an organisation.
+Users,,,role,string,,,,,,,vcard:hasRole,Type(s) of contribution or role of the user
+Users,,,user groups,string_array,,,,,,,,The user group(s) that a user may be associated with
+Users,,,Account information,Heading,,,,,,,,Information about user's account
+Users,,,login name,string,,,,,,,obo:NCIT_C42694,The account name used by a person to access a computer system. This should be the email address unless the user specified another email address.
+Users,,,date account was created,date,,,,,,,,The date the account was created in keycloak
+Users,,,is active,bool,,,,,,,,Indiciation if the account is currently activated
+Users,,,date account was closed,date,,,,,,isActive && isActive === false,,Date the user's account was closed
+Users,,,reason account was closed,text,,,,,,isActive && isActive === false,,An explanation on why the account was closed
+Users,,,assigned to schemas,refback,,,,User permissions,user,,,The schemas that an individual can access
+User permissions,,,,,,,,,,,,An overview of user permissions by schema 
+User permissions,,,user,select,1,TRUE,,Users,,,,
+User permissions,,,schema,select,1,TRUE,,Schemas,,,,The name of the schema
+User permissions,,,permission level,ontology,,,,Permission levels,,,,"The MOLGENIS role assigned to a user e.g., Viewer, Editor, etc."
+User permissions,,,is active,bool,,,,,,,,An indication if the permission level is active
+Schemas,,,,,,,,,,,,The schemas currently available on this server
+Schemas,,,name,string,1,TRUE,,,,,,Name of the schema
+Schemas,,,description,text,,,,,,,,A description of the schema
+Permission levels,ONTOLOGIES,,,,,,,,,,,MOLGENIS User Roles
