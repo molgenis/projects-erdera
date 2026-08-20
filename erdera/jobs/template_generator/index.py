@@ -120,15 +120,15 @@ class BuildTemplate:
         elif columnType == 'DATE':
             columnType = 'DATE (yyyy-mm-dd)'
         elif columnType == 'STRING_ARRAY':
-            columnType = 'STRING_ARRAY (multiple answers allowed)'
+            columnType = "STRING_ARRAY: enter one or more values separated by a comma. E.g., 'value 1','value-2',..."
         elif columnType in ['ONTOLOGY', 'SELECT']:
-            columnType = f'{refTableName}: Select one item'
+            columnType = f'Select one item from {refTableName}'
         elif columnType in ['ONTOLOGY_ARRAY', 'MULTISELECT']:
-            columnType = f'{refTableName}: Select multiple items'
+            columnType = f'Select one or more items from {refTableName}'
         elif columnType == 'INT':
             columnType = 'INTEGER'
         elif columnType in ['BOOL']:
-            return
+            columnType = 'Select TRUE or FALSE'
         
         return columnType
         
@@ -354,7 +354,6 @@ class BuildTemplate:
             self.build_sheet(workbook=workbook,
                              sheet_name=table,
                              column_metadata=col_meta,
-                             #column_metadata=[col_meta[index] for index in [9,23]],
                              styles=styles)
 
         # only build lookups if present in the model
