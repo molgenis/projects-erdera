@@ -225,7 +225,7 @@ class BuildTemplate:
                 lookups_col_index = self.lookups_col_index
                 lookup = next( # if lookup is already created, use this information
                     (elem for elem in self.lookups 
-                     if elem['name'] == ontology_table), 
+                     if elem['name'] == ontology_table),
                      None)
                 if lookup:
                     # get column letter and set template col to this range 
@@ -267,7 +267,7 @@ class BuildTemplate:
                         query_filter=query_filter,
                         schema=ontology_schema)
 
-                data = data.sort(key=lambda x: x['name'].lower())
+                data.sort(key=lambda x: x['name'].lower())
                 lookup = { # create lookup entry
                     'name': ontology_table,
                     'data': list(data),
@@ -347,9 +347,20 @@ class BuildTemplate:
             table_meta = metadata.get_table(by='name', value=table)
 
             excluded_types = ['SECTION', 'HEADING', 'REFBACK']
+            # only exclude the id column for these tables (as these use an auto ID)
+            exclude_id = ['Samples RNA', 'Samples lrGS', 'Samples OGM',
+                          'Experiments RNA', 'Experiments lrGS', 'Experiments OGM']
             col_meta = [
                 col for col in table_meta.columns
-                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible') and not col.name == 'id'
+                if (
+                    col.columnType not in excluded_types 
+                    and not col.name.startswith('mg_') 
+                    and not col.get('visible') 
+                    and not (
+                        table in exclude_id 
+                        and col.name == 'id'
+                    )
+                )
             ]
 
             self.build_sheet(workbook=workbook,
