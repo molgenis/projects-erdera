@@ -4,11 +4,15 @@ from os import environ
 import sys
 import logging
 from typing import TypedDict
+import textwrap
+
 import xlsxwriter
 from openpyxl.utils.cell import get_column_letter
+
 from molgenis_emx2_pyclient import Client
 from molgenis_emx2_pyclient.metadata import Schema, Table, Column
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.captureWarnings(True)
@@ -23,7 +27,7 @@ if environ.get('MOLGENIS_HOST'):
     HOST = environ['MOLGENIS_HOST']
 
 # init template builder params
-SCHEMA: str = None  # rd3
+SCHEMA: str = None # rd3
 TABLES: list[str] = []
 
 # process args: must send as a string separated with a ";"
@@ -104,6 +108,30 @@ class BuildTemplate:
             is_req = False
         return is_key or is_req
 
+    def rewrite_col_type(self,
+                         column: Column):
+        """
+        Update the columnType to make its meaning clearer
+        """
+        columnType = column.get('columnType')
+        refTableName = column.get('refTableName')
+        if not columnType:
+            columnType = 'STRING'
+        elif columnType == 'DATE':
+            columnType = 'DATE (yyyy-mm-dd)'
+        elif columnType == 'STRING_ARRAY':
+            columnType = "STRING_ARRAY: enter one or more values separated by a comma. E.g., 'value 1','value-2',..."
+        elif columnType in ['ONTOLOGY', 'SELECT']:
+            columnType = f'Select one item from {refTableName}'
+        elif columnType in ['ONTOLOGY_ARRAY', 'MULTISELECT']:
+            columnType = f'Select one or more items from {refTableName}'
+        elif columnType == 'INT':
+            columnType = 'INTEGER'
+        elif columnType in ['BOOL']:
+            columnType = 'Select TRUE or FALSE'
+        
+        return columnType
+        
     def write_sheet_header(self,
                            sheet,
                            column: Column,
@@ -126,15 +154,42 @@ class BuildTemplate:
 
         sheet.write(0, col_index, column.name, current_header_style)
 
-    def column_is_ontology_type(self, column: Column) -> bool:
-        """Determine if the column is ONTOLOGY or ONTOLOGY_ARRAY"""
-        return column.columnType.startswith('ONTOLOGY')
+        # add comment which will appear when hovered over the field
+        columnType = self.rewrite_col_type(column=column)
+        description = column.get('description')
+
+        # comment text based on description and column type
+        comment_text = f'{description}'
+        if columnType:
+            comment_text = f'{description} \n\n {columnType}'    
+
+        # format comment
+        width = 200
+        # wrap the text to prevent text from falling outside the comment box
+        wrap_at = 40
+        wrapped_lines = []
+        for line in comment_text.split("\n"):
+            wrapped_lines.extend(textwrap.wrap(line, width=wrap_at))
+        comment_text = "\n".join(wrapped_lines)
+        # set height of comment box
+        height = max(20, len(wrapped_lines) * 15)
+
+        # write comment
+        sheet.write_comment(0, col_index, comment_text,
+                            {
+                                'width': width,
+                                'height': height
+                            })
+
+    def column_is_ontology_type_or_ref_to_orgs(self, column: Column) -> bool:
+        """Determine if the column is ONTOLOGY, ONTOLOGY_ARRAY, or a reference to Organisations"""
+        return column.columnType.startswith('ONTOLOGY') or column.get('refTableName') == 'Organisations'
 
     def table_has_ontology_types(self, table_meta: Table) -> bool:
         """Determine if there are ONTOLOGY types in a table"""
         count: int = 0
         for column in table_meta:
-            if self.column_is_ontology_type(column=column):
+            if self.column_is_ontology_type_or_ref_to_orgs(column=column):
                 count += 1
         return count > 0
 
@@ -162,58 +217,99 @@ class BuildTemplate:
 
             # determine if ontology table is present
             ontology_table: str = column.get('refTableName')
-            should_build_ontology: bool = self.column_is_ontology_type(
+            should_build_ontology: bool = self.column_is_ontology_type_or_ref_to_orgs(
                 column=column) and ontology_table is not None
 
             if should_build_ontology:
-                log.info('Creating lookup from %s', ontology_table)
-                self.should_build_lookup_sheet = True
-                ontology_schema: str = self.schema
-
-                if bool(column.get('refSchemaId')):
-                    ontology_schema = column.refSchemaId
-
-                query_filter: str = ''
-                if ontology_table in [
-                    'Concentration measurement type',
-                    'File formats',
-                    'Movietime',
-                    'Sample type',
-                    'Sequencing instrument models',
-                    'Sequencing methods',
-                    'Storage buffer',
-                    'Storage conditions',
-                    'Tissue type',
-                    'Library source',
-                    'Sequencing platforms',
-                    'Units',
-                    'Concentration measurement type',
-                    'Library layout'
-                ]:
-                    query_filter = 'tags=="erdera"'
-                    if ONTOLOGY_TAG != "":
-                        query_filter = f"tags=='{ONTOLOGY_TAG}'"
-
-                data = client.get(
-                    table=ontology_table,
-                    columns=['name'],
-                    query_filter=query_filter,
-                    schema=ontology_schema)
-
                 lookups_col: str = get_column_letter(self.lookups_col_index+1)
-                lookup = {
+                lookups_col_index = self.lookups_col_index
+                lookup = next( # if lookup is already created, use this information
+                    (elem for elem in self.lookups 
+                     if elem['name'] == ontology_table),
+                     None)
+                if lookup:
+                    # get column letter and set template col to this range 
+                    lookups_col = lookup['lookups_col']
+                    lookups_col_index = lookup['lookups_col_index']
+                    data = lookup['data']
+                else: # if not, create the lookup list
+                    log.info('Creating lookup from %s', ontology_table)
+                    self.lookups_col_index += 1
+                    self.should_build_lookup_sheet = True
+                    ontology_schema: str = self.schema
+
+                    if bool(column.get('refSchemaId')):
+                        ontology_schema = column.refSchemaId
+
+                    query_filter: str = ''
+                    if ontology_table in [
+                        'Concentration measurement type',
+                        'File formats',
+                        'Movietime',
+                        'Sample type',
+                        'Sequencing instrument models',
+                        'Sequencing methods',
+                        'Storage buffer',
+                        'Storage conditions',
+                        'Tissue type',
+                        'Library source',
+                        'Sequencing platforms',
+                        'Units',
+                        'Library layout'
+                    ]:
+                        query_filter = 'tags=="erdera"'
+                        if ONTOLOGY_TAG != "":
+                            query_filter = f"tags=='{ONTOLOGY_TAG}'"
+
+                    data = client.get(
+                        table=ontology_table,
+                        columns=['name'],
+                        query_filter=query_filter,
+                        schema=ontology_schema)
+
+                data.sort(key=lambda x: x['name'].lower())
+                lookup = { # create lookup entry
                     'name': ontology_table,
                     'data': list(data),
                     'lookups_col': lookups_col,
-                    'lookups_col_index': self.lookups_col_index,
+                    'lookups_col_index': lookups_col_index,
                     'template_sheet': sheet_name,
                     'template_col': get_column_letter(index+1),
                     'template_col_index': index,
                     'formula': f"=lookups!{lookups_col}2:{lookups_col}{len(data)+1}"
                 }
-                # print(lookup)
                 self.lookups.append(lookup)
-                self.lookups_col_index += 1
+            
+            # determine if column is a boolean
+            is_bool: bool = column.get('columnType') == 'BOOL'
+            # get the lookup column and index
+            lookups_col: str = get_column_letter(self.lookups_col_index+1)
+            lookups_col_index = self.lookups_col_index
+            if is_bool:
+                lookup = next(
+                    (elem for elem in self.lookups 
+                     if elem['name'] == 'Boolean'), 
+                     None)
+                # if there is already an boolean lookup, get the data (i.e., lookup col and index)
+                if lookup:
+                    # get column letter and set template col to this range 
+                    lookups_col = lookup['lookups_col']
+                    lookups_col_index = lookup['lookups_col_index']
+                else: # only increment index if lookup is created for the boolean (first time) 
+                    self.lookups_col_index += 1
+                
+                lookup = { # create lookup
+                    'name': 'Boolean',
+                    'data': [{'name':True}, {'name':False}],
+                    'lookups_col': lookups_col,
+                    'lookups_col_index': lookups_col_index,
+                    'template_sheet': sheet_name,
+                    'template_col': get_column_letter(index+1),
+                    'template_col_index': index,
+                    'formula': f"=lookups!{lookups_col}2:{lookups_col}3"
+                }
+                self.lookups.append(lookup)
+                
 
             # iterate over rows in the sheet: apply styles and/or validation
             if self.column_is_required(column=column):
@@ -251,9 +347,20 @@ class BuildTemplate:
             table_meta = metadata.get_table(by='name', value=table)
 
             excluded_types = ['SECTION', 'HEADING', 'REFBACK']
+            # only exclude the id column for these tables (as these use an auto ID)
+            exclude_id = ['Samples RNA', 'Samples lrGS', 'Samples OGM',
+                          'Experiments RNA', 'Experiments lrGS', 'Experiments OGM']
             col_meta = [
                 col for col in table_meta.columns
-                if col.columnType not in excluded_types and not col.name.startswith('mg_') and not col.get('visible')
+                if (
+                    col.columnType not in excluded_types 
+                    and not col.name.startswith('mg_') 
+                    and not col.get('visible') 
+                    and not (
+                        table in exclude_id 
+                        and col.name == 'id'
+                    )
+                )
             ]
 
             self.build_sheet(workbook=workbook,
@@ -264,20 +371,23 @@ class BuildTemplate:
         # only build lookups if present in the model
         if self.should_build_lookup_sheet:
             lookups_sheet = workbook.add_worksheet(name='lookups')
+            written_columns = set() # to keep track of the lookup lists written to the lookups sheet
             for lookup in self.lookups:
-                log.info(
-                    'Creating lookup and apply validation rules for %s', lookup['name'])
-                lookups_sheet.write(
-                    0,
-                    lookup['lookups_col_index'],
-                    lookup['name'],
-                    styles['header_default'])
-
-                # write ontology terms
-                for index, row in enumerate(lookup['data']):
+                if lookup['lookups_col_index'] not in written_columns:
+                    log.info('Creating lookup and apply validation rules for %s', lookup['name'])
                     lookups_sheet.write(
-                        index+1, lookup['lookups_col_index'], f"{row['name']}")
+                        0,
+                        lookup['lookups_col_index'],
+                        lookup['name'],
+                        styles['header_default'])
 
+                    # write ontology terms
+                    for index, row in enumerate(lookup['data']):
+                        lookups_sheet.write(
+                            index+1, lookup['lookups_col_index'], f"{row['name']}")
+                    written_columns.add(lookup['lookups_col_index'])
+
+                # apply validation always (also for the duplicate lookups)
                 # apply validation in the appropriate sheet
                 template_sheet = workbook.get_worksheet_by_name(
                     lookup['template_sheet'])
