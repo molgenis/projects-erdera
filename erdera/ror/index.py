@@ -128,5 +128,5 @@ if __name__ == '__main__':
                   'https://ror.org/01tevnk56', 'https://ror.org/041x7eh14', 'https://ror.org/00zam0e96', 'https://ror.org/05nsbhw27',
                   'https://ror.org/013meh722', 'https://ror.org/01gckhp53', 'https://ror.org/00t3r8h32', 'https://ror.org/05j1gs298',
                   'https://ror.org/05jmd4043', 'https://ror.org/01jmxt844', 'https://ror.org/00ss42h10', 'https://ror.org/05g2amy04', 
-                  'https://ror.org/0590pq693', 'https://ror.org/01d5vx451', 'https://ror.org/01kj2bm70']
+                  'https://ror.org/0590pq693', 'https://ror.org/01d5vx451', 'https://ror.org/01kj2bm70', 'https://ror.org/02kkvpp62']
     main(rorIDs=ids_to_map)
