@@ -1,4 +1,19 @@
-"""Mapping GPAP participants data to RD3"""
+"""Mapping GPAP participants data to RD3
+
+## For deployment
+
+1. Copy the contents of this script into the script editor UI
+2. Copy the following requirements into the 'dependencies' field
+3. Save and run
+
+### Dependencies
+
+numpy
+pandas
+python-dotenv
+molgenis-emx2-pyclient
+
+"""
 import logging
 from os import environ
 import ast
@@ -11,31 +26,46 @@ from molgenis_emx2_pyclient.client import Client
 
 load_dotenv()
 
+# set environment variables
+MOLGENIS_HOST = 'http://localhost:8080/'
+MOLGENIS_TOKEN = environ['MOLGENIS_TOKEN']
+SCHEMA_GPAP_SOURCE = 'Staging Area Gpap'
+SCHEMA_ONTOLOGY_MAPPINGS = 'Ontology mappings'
+SCHEMA_ONTOLOGIES = 'CatalogueOntologies'
+MOLGENIS_HOST_SCHEMA_TARGET = 'erdera'
+SCHEMA_QUALITY_CONTROL = 'Quality Control'
+
+if environ.get('MOLGENIS_HOST'):
+    MOLGENIS_HOST = environ['MOLGENIS_HOST']
+
+
 logging.captureWarnings(True)
 log = logging.getLogger("Staging Area Mapping")
+
 
 def get_staging_area_participants():
     """Retrieve metadata from /<staging area>/Participants"""
     logging.info('Retrieving required metadata')
-    with Client(environ['MOLGENIS_HOST'], token=environ['MOLGENIS_TOKEN']) as client_ind:
+    with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
         return client_ind.get(
             table='Participants',
-            schema=environ['SCHEMA_GPAP_SOURCE'],
+            schema=SCHEMA_GPAP_SOURCE,
             as_df=True
         )
-    
+
+
 def build_import_pedigree_table(client, data: pd.DataFrame):
     """Map staging area data into the Pedigree table format"""
     # retrieve current pedigrees in RD3 - unfinished
-    # current_pedigrees = client.get(table='Pedigree', as_df=True) 
+    # current_pedigrees = client.get(table='Pedigree', as_df=True)
 
     # get the pedigree information with family_id (a.k.a alternate ids) and the others affacted info
     pedigree = (data[['famid', 'family_id', 'otheraffected']].rename(columns={
         'famid': 'id',
-        'family_id':'alternate ids',
+        'family_id': 'alternate ids',
         'otheraffected': 'others affected'
     })
-    .dropna(subset = ['id'])
+        .dropna(subset=['id'])
     )
 
     others_affected_dict = {
@@ -51,27 +81,28 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
         .dropna(subset=['alternate ids'])
         .groupby('id')['alternate ids']
         .agg(lambda x: ','.join(sorted(set(x))))
-        )
+    )
 
-    # gather and set the 'others affected' field. 
+    # gather and set the 'others affected' field.
     others = (
         pedigree
         .dropna(subset=['others affected'])
         .groupby('id')['others affected']
         # if a True is present for the family, set the field of the whole family to True
         .any()
-        )
-    
+    )
+
     # merge the to DFs together
     pedigree = (
         pedigree[['id']]
         .drop_duplicates()
         .merge(alt_ids, on='id', how='left')
         .merge(others, on='id', how='left')
-        )
-            
+    )
+
     # upload
     client.save_table(table='Pedigree', data=pedigree)
+
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
@@ -103,10 +134,12 @@ def build_import_individuals_table(client, data: pd.DataFrame):
 
     # map age group
     age = pd.to_numeric(individuals['age at enrolment'], errors='coerce')
-    individuals['age at enrolment'] = "P" + age.astype('Int64').astype('string') + "Y"
+    individuals['age at enrolment'] = "P" + \
+        age.astype('Int64').astype('string') + "Y"
 
     # upload individuals data to RD3
     client.save_table(table='Individuals', data=individuals)
+
 
 def add_incomplete_families_collection(client: Client):
     """Create a new collection to capture the incomplete families"""
@@ -119,6 +152,7 @@ def add_incomplete_families_collection(client: Client):
 
     # save collection
     client.save_table(table='Collections', data=collection)
+
 
 def build_import_pedigree_members(client: Client, data: pd.DataFrame):
     """ Map staging area data into the Pedigree members table
@@ -140,23 +174,28 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
                  .set_index('pedigree')['individual'])
     # set the relative of each member to the index case of the family
     pedigree_members['relative'] = pedigree_members['pedigree'].map(index_map)
-    
+
     # Set relation column
     pedigree_members['relation'] = None
-    pedigree_members.loc[pedigree_members['index'] == 'Yes', 'relation'] = 'Patient'
+    pedigree_members.loc[pedigree_members['index']
+                         == 'Yes', 'relation'] = 'Patient'
 
     # Find families without an index
-    families_wo_index = pedigree_members.loc[pedigree_members['relative'].isna(),'pedigree'].unique().tolist()
-    log.info(f'The following families are incomplete, i.e., missing an index case: {families_wo_index}')
+    families_wo_index = pedigree_members.loc[pedigree_members['relative'].isna(
+    ), 'pedigree'].unique().tolist()
+    log.info(
+        f'The following families are incomplete, i.e., missing an index case: {families_wo_index}')
     # remove these members
-    pedigree_members = pedigree_members[~pedigree_members['pedigree'].isin(families_wo_index)]
+    pedigree_members = pedigree_members[~pedigree_members['pedigree'].isin(
+        families_wo_index)]
 
-    # flag the incomplete families in the Pedigree table 
+    # flag the incomplete families in the Pedigree table
     add_incomplete_families_collection(client=client)
-    pedigree = client.get('Pedigree', as_df = True)
+    pedigree = client.get('Pedigree', as_df=True)
     pedigree.loc[pedigree['id'].isin(families_wo_index),
                  'included in resources'] = 'Incomplete families'
-    client.save_table(table='Pedigree', data=pedigree) # upload with updated field 
+    # upload with updated field
+    client.save_table(table='Pedigree', data=pedigree)
 
     # remove the index column
     pedigree_members = pedigree_members.drop(columns={'index'})
@@ -170,7 +209,8 @@ def build_import_pedigree_members(client: Client, data: pd.DataFrame):
         affected_dict)
 
     # upload
-    client.save_table(table = 'Pedigree members', data = pedigree_members)
+    client.save_table(table='Pedigree members', data=pedigree_members)
+
 
 def build_import_clinical_observations(client, data: pd.DataFrame):
     """Map staging area data into the clinical observations table"""
@@ -198,13 +238,16 @@ def build_import_clinical_observations(client, data: pd.DataFrame):
 
     # upload
     # first delete content of clinical observations
-    client.truncate(table='Phenotype observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
-    client.truncate(table='Disease history', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
-    client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])    
-    
+    client.truncate(table='Phenotype observations',
+                    schema=MOLGENIS_HOST_SCHEMA_TARGET)
+    client.truncate(table='Disease history',
+                    schema=MOLGENIS_HOST_SCHEMA_TARGET)
+    client.truncate(table='Clinical observations',
+                    schema=MOLGENIS_HOST_SCHEMA_TARGET)
+
     # then upload
     client.save_table(table='Clinical observations',
-                       data=clinical_observations)
+                      data=clinical_observations)
 
 
 def build_import_consent(client, data: pd.DataFrame):
@@ -225,9 +268,11 @@ def build_import_consent(client, data: pd.DataFrame):
 
     # upload the data
     # first truncate the consent table
-    client.truncate(table='Individual consent', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'])
+    client.truncate(table='Individual consent',
+                    schema=MOLGENIS_HOST_SCHEMA_TARGET)
     # then upload
     client.save_table(table='Individual consent', data=indv_consent)
+
 
 def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontology_name: str):
     """Upload the entries that have a mismatch between the name and/or code. """
@@ -235,47 +280,57 @@ def upload_non_matches(rd3_data: set, non_matches: set, mapping: dict, rd3_ontol
     df_mismatches = pd.DataFrame(list(non_matches), columns=['name', 'code'])
     # create a df of the rd3 names and codes
     rd3_data_df = pd.DataFrame(list(rd3_data), columns=['name', 'code'])
-    # create a df of the non-matches merged with the rd3 names 
-    df_mismatch_names = pd.merge(df_mismatches, rd3_data_df, on='code', how='inner') # mismatched on name (same code)
-    df_mismatch_codes = pd.merge(df_mismatches, rd3_data_df, on='name', how='inner') # mismatched on code (same name)
-    
-    df_mismatch_names = df_mismatch_names.rename(columns= { # rename columns to correspond to schema
+    # create a df of the non-matches merged with the rd3 names
+    # mismatched on name (same code)
+    df_mismatch_names = pd.merge(
+        df_mismatches, rd3_data_df, on='code', how='inner')
+    # mismatched on code (same name)
+    df_mismatch_codes = pd.merge(
+        df_mismatches, rd3_data_df, on='name', how='inner')
+
+    df_mismatch_names = df_mismatch_names.rename(columns={  # rename columns to correspond to schema
         'name_x': 'GPAP name',
         'code': 'GPAP code',
         'name_y': 'RD3 name'
     })
-    df_mismatch_names['RD3 code'] = df_mismatch_names['GPAP code'] # the codes are identical between GPAP and RD3
-    df_mismatch_names['type of mismatch'] = 'name' # the type of mismatch is on the name 
+    # the codes are identical between GPAP and RD3
+    df_mismatch_names['RD3 code'] = df_mismatch_names['GPAP code']
+    # the type of mismatch is on the name
+    df_mismatch_names['type of mismatch'] = 'name'
 
-    df_mismatch_codes = df_mismatch_codes.rename(columns= { # rename columns to correspond to schema
+    df_mismatch_codes = df_mismatch_codes.rename(columns={  # rename columns to correspond to schema
         'name': 'GPAP name',
         'code_x': 'GPAP code',
         'code_y': 'RD3 code'
     })
-    df_mismatch_codes['RD3 name'] = df_mismatch_codes['GPAP name'] # the names are identical between GPAP and RD3
-    df_mismatch_codes['type of mismatch'] = 'code' # the type of mismatch is on the code
+    # the names are identical between GPAP and RD3
+    df_mismatch_codes['RD3 name'] = df_mismatch_codes['GPAP name']
+    # the type of mismatch is on the code
+    df_mismatch_codes['type of mismatch'] = 'code'
 
     # upload the non-matches minus the mappings (for the mappings there is a correction)
     quality_control_upload = pd.concat([df_mismatch_codes, df_mismatch_names])
-    quality_control_upload = quality_control_upload[~quality_control_upload[['GPAP name', 'GPAP code']] \
-    .apply(tuple, axis=1).isin(set(mapping))]
+    quality_control_upload = quality_control_upload[~quality_control_upload[['GPAP name', 'GPAP code']]
+                                                    .apply(tuple, axis=1).isin(set(mapping))]
 
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['SCHEMA_QUALITY_CONTROL'],
-        token=environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=SCHEMA_QUALITY_CONTROL,
+        token=MOLGENIS_TOKEN
     )
 
     # upload the mismatches
     molgenis.save_table(data=quality_control_upload, table=rd3_ontology_name)
 
+
 def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapping: dict):
     """Check if there is no RD3 match for the data entry"""
     # get the codes of the GPAP entries that do not have an RD3 match (i.e., this code is missing in the RD3 ontology)
-    missing_codes = set([i[1] for i in non_matches]) - set([i[1] for i in rd3_data])
+    missing_codes = set([i[1] for i in non_matches]) - \
+        set([i[1] for i in rd3_data])
 
     # create a dictionary of the non-matches with the codes as keys
-    non_matches_dict = {y: x for x,y in non_matches}
+    non_matches_dict = {y: x for x, y in non_matches}
 
     # create a df of the missing entries (missing in RD3)
     missing_df = pd.DataFrame({
@@ -283,18 +338,20 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
         'incoming value': non_matches_dict.get(code),
         'incoming code': code
     }
-    for code in missing_codes)
+        for code in missing_codes)
 
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['SCHEMA_ONTOLOGY_MAPPINGS'],
-        token=environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=SCHEMA_ONTOLOGY_MAPPINGS,
+        token=MOLGENIS_TOKEN
     )
-    # check if there are new values in the ontology mappings schema to prevent overwrite during upload 
+    # check if there are new values in the ontology mappings schema to prevent overwrite during upload
     ontology_mappings_data = molgenis.get(table=rd3_ontology_name, as_df=True)
-    new_value = ontology_mappings_data[~ontology_mappings_data['new value'].isna()]
-    # update the mapping dictionary with the new value 
-    mapping.update(new_value.set_index(['incoming value', 'incoming code'])['new value'].to_dict())
+    new_value = ontology_mappings_data[~ontology_mappings_data['new value'].isna(
+    )]
+    # update the mapping dictionary with the new value
+    mapping.update(new_value.set_index(
+        ['incoming value', 'incoming code'])['new value'].to_dict())
 
     # make sure the value(s) that have a new value are removed from the df, so the new value will not be overwritten
     missing_df = (missing_df.merge(new_value[['source', 'incoming value', 'incoming code']].drop_duplicates(),
@@ -307,57 +364,63 @@ def check_no_match(rd3_data: set, non_matches: set, rd3_ontology_name: str, mapp
     # save the df
     molgenis.save_table(data=missing_df, table=rd3_ontology_name)
 
+
 def match_phenotypes(gpap_data: set):
     """Wrapper function to match the phenotypes"""
-    return match_ontologies(gpap_data=gpap_data, rd3_ontology_name = 'Phenotypes', qc_correct = 'correct phenotype')
+    return match_ontologies(gpap_data=gpap_data, rd3_ontology_name='Phenotypes', qc_correct='correct phenotype')
+
 
 def match_diseases(gpap_data: set):
     """Wrapper function to match the diseases"""
-    return match_ontologies(gpap_data=gpap_data, rd3_ontology_name = 'Diseases', qc_correct = 'correct disease')
+    return match_ontologies(gpap_data=gpap_data, rd3_ontology_name='Diseases', qc_correct='correct disease')
+
 
 def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
     """Match GPAP ontologies to RD3 and find mismatches"""
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['SCHEMA_ONTOLOGIES'],
-        token=environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=SCHEMA_ONTOLOGIES,
+        token=MOLGENIS_TOKEN
     )
     # get the RD3 ontology
     rd3_ontology = molgenis.get(
-        table=rd3_ontology_name, schema=environ['SCHEMA_ONTOLOGIES'], as_df=True)
+        table=rd3_ontology_name, schema=SCHEMA_ONTOLOGIES, as_df=True)
 
     # create a set of the rd3 names and codes
     rd3_data = set(zip(rd3_ontology['name'], rd3_ontology['code']))
-    # get the GPAP ontology values that do not have a name and code match in RD3 
+    # get the GPAP ontology values that do not have a name and code match in RD3
     non_matches = gpap_data - rd3_data
 
     # check for which gpap cases quality control has taken place
     molgenis = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['SCHEMA_QUALITY_CONTROL'],
-        token=environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=SCHEMA_QUALITY_CONTROL,
+        token=MOLGENIS_TOKEN
     )
     # get the quality control information
     qc_info = molgenis.get(table=rd3_ontology_name, as_df=True)
-    new_value = qc_info[~qc_info[qc_correct].isna()] # get the rows that have a correction
+    # get the rows that have a correction
+    new_value = qc_info[~qc_info[qc_correct].isna()]
 
-    ## case 1: there is a new entry, meaning the GPAP entry should be that
+    # case 1: there is a new entry, meaning the GPAP entry should be that
     # create a dictionary of the GPAP name and code with the new value (the correct value)
-    mapping = new_value.set_index(['GPAP name', 'GPAP code'])[qc_correct].to_dict()
+    mapping = new_value.set_index(['GPAP name', 'GPAP code'])[
+        qc_correct].to_dict()
 
-    ## case 2: the _is correct_ boolean is set to True, meaning the RD3 variant of the GPAP entry is correct
+    # case 2: the _is correct_ boolean is set to True, meaning the RD3 variant of the GPAP entry is correct
     is_correct = qc_info[qc_info['is correct']]
     # for these cases, the RD3 name is the correct one
-    mapping.update(is_correct.set_index(['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
+    mapping.update(is_correct.set_index(
+        ['GPAP name', 'GPAP code'])['RD3 name'].to_dict())
 
     # upload the mismatches
-    upload_non_matches(rd3_data=rd3_data, 
-                       non_matches=non_matches, 
-                       mapping=mapping, 
+    upload_non_matches(rd3_data=rd3_data,
+                       non_matches=non_matches,
+                       mapping=mapping,
                        rd3_ontology_name=rd3_ontology_name)
     # upload the cases where there is no RD3 data
-    check_no_match(rd3_data=rd3_data, 
-                   non_matches = non_matches,
+    check_no_match(rd3_data=rd3_data,
+                   non_matches=non_matches,
                    rd3_ontology_name=rd3_ontology_name,
                    mapping=mapping)
 
@@ -365,6 +428,7 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
     non_matches = non_matches - set(mapping.keys())
 
     return non_matches, mapping
+
 
 def build_import_disease_history(client, data: pd.DataFrame):
     """Map staging area data to disease history data"""
@@ -375,7 +439,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
         })
 
     # the auto IDs are necessary from clinical observations
-    clinical_obs = client.get(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
+    clinical_obs = client.get(schema=MOLGENIS_HOST_SCHEMA_TARGET,
                               table='Clinical observations',
                               as_df=True)
     # create a map of individual ID and the corresponding auto generated ID
@@ -394,7 +458,7 @@ def build_import_disease_history(client, data: pd.DataFrame):
                                         == report_id, 'age group at onset']
         clinical_obs.loc[clinical_obs['individuals'] ==
                          report_id, "age group at onset"] = age_group
-        
+
         # get all diseases from this individual
         diseases_all = parse_entries(disease_elem.get('disease'))
 
@@ -404,7 +468,8 @@ def build_import_disease_history(client, data: pd.DataFrame):
                 continue
 
             name = disease_ordo.get('name')
-            code = disease_ordo.get('id').split(':')[1].strip() # remove prefix and whitespace
+            code = disease_ordo.get('id').split(
+                ':')[1].strip()  # remove prefix and whitespace
             status = disease.get('status')
 
             if name is None:
@@ -424,15 +489,19 @@ def build_import_disease_history(client, data: pd.DataFrame):
 
     non_matches, mappings = match_diseases(diseases_set)
 
-    disease_history['key'] = list(zip(disease_history['disease'], disease_history['disease code']))
+    disease_history['key'] = list(
+        zip(disease_history['disease'], disease_history['disease code']))
 
     # map the corrections
-    disease_history.loc[disease_history['key'].isin(mappings), 'disease'] = disease_history['key'].map(mappings)
+    disease_history.loc[disease_history['key'].isin(
+        mappings), 'disease'] = disease_history['key'].map(mappings)
     # remove the non-matches
     # first remake the key so the corrections are incorporated
-    disease_history['key'] = list(zip(disease_history['disease'], disease_history['disease code']))
-    disease_history = disease_history[~disease_history['key'].isin(non_matches)]
-   
+    disease_history['key'] = list(
+        zip(disease_history['disease'], disease_history['disease code']))
+    disease_history = disease_history[~disease_history['key'].isin(
+        non_matches)]
+
     # map the disease status TODO: use the mappings schema
     status_dict = {
         'Confirmed': 'Confirmed diagnosis'
@@ -458,14 +527,18 @@ def build_import_disease_history(client, data: pd.DataFrame):
     }
     clinical_obs['age group at onset'] = clinical_obs['age group at onset'].map(
         onset_dict)
-    
-    # remove the disease code field 
+
+    # remove the disease code field
     disease_history = disease_history.drop(columns=['disease code'])
 
     # upload the data
-    client.truncate(table='Clinical observations', schema=environ['MOLGENIS_HOST_SCHEMA_TARGET']) # first truncate in order to update (to prevent duplicates)
+    # first truncate in order to update (to prevent duplicates)
+    client.truncate(table='Clinical observations',
+                    schema=MOLGENIS_HOST_SCHEMA_TARGET)
     client.save_table(table='Clinical observations', data=clinical_obs)
-    client.save_table(table='Disease history', data=disease_history.drop_duplicates())
+    client.save_table(table='Disease history',
+                      data=disease_history.drop_duplicates())
+
 
 def parse_entries(entries):
     """
@@ -497,9 +570,10 @@ def parse_entries(entries):
     # if it is already a list, return the original observation
     if isinstance(entries, list):
         return entries
-    
-    # in all other cases,  return list 
+
+    # in all other cases,  return list
     return []
+
 
 def build_import_phenotype_observations(client, data: pd.DataFrame):
     """Map staging area data to phenotype observations data"""
@@ -509,7 +583,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         })
 
     # the auto IDs are necessary from clinical observations
-    clinical_obs = client.get(schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
+    clinical_obs = client.get(schema=MOLGENIS_HOST_SCHEMA_TARGET,
                               table='Clinical observations',
                               as_df=True)
     # create a map of individual ID and the corresponding auto generated ID
@@ -522,22 +596,24 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         report_id = pheno_obs['report_id']
         id = id_map.get(report_id)
 
-        # check if the individual has a clinical observations ID - otherwise the individual is present in the 
+        # check if the individual has a clinical observations ID - otherwise the individual is present in the
         # GPAP staging area data but not in RD3
         if pd.isna(id):
-            logging.warning(f'Individual {pheno_obs['report_id']} does not have a clinical observation ID. The \
-    individual is not included in the Phenotype Observations.')
+            logging.warning(
+                'Individual %s does not have a clinical observation ID. The individual is not included in the Phenotype Observations.',
+                pheno_obs['report_id']
+            )
             continue
-        
+
         # get all observations of this individual
         observations_all = parse_entries(pheno_obs.get('type'))
-        
+
         # loop through the phenotypic observations of the individual
         for observation in observations_all:
             name = observation.get('name')
             if name is None:
                 continue
-            
+
             pheno_observations2.append({
                 'part of clinical observation': id,
                 'type': name,
@@ -552,19 +628,24 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
 
     # map the phenotypic features from GPAP format to RD3
     non_matches, mappings = match_phenotypes(observations)
-    phen_observations['key'] = list(zip(phen_observations['type'], phen_observations['phenotype code']))
+    phen_observations['key'] = list(
+        zip(phen_observations['type'], phen_observations['phenotype code']))
 
     # map the corrections
-    phen_observations.loc[phen_observations['key'].isin(mappings), 'type'] = phen_observations['key'].map(mappings)
+    phen_observations.loc[phen_observations['key'].isin(
+        mappings), 'type'] = phen_observations['key'].map(mappings)
     # remove the non-matches
-    # first remake the key so the corrections are incorporated 
-    phen_observations['key'] = list(zip(phen_observations['type'], phen_observations['phenotype code']))
-    phen_observations = phen_observations[~phen_observations['key'].isin(non_matches)]
-    
+    # first remake the key so the corrections are incorporated
+    phen_observations['key'] = list(
+        zip(phen_observations['type'], phen_observations['phenotype code']))
+    phen_observations = phen_observations[~phen_observations['key'].isin(
+        non_matches)]
+
     # there are (at least) two cases where the excluded value is both true and false for an individual
     # this is not possible since it would mean that a phenotypic feature is both observed and not-observed
-    # print and log this and remove from the df 
-    data_entry_errors = phen_observations.groupby(['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
+    # print and log this and remove from the df
+    data_entry_errors = phen_observations.groupby(
+        ['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
 
     if not phen_observations[data_entry_errors].empty:
         logging.warning(f"Warning! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
@@ -574,20 +655,22 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         phen_observations = phen_observations[~data_entry_errors]
 
     # drop unneccessary columns
-    phen_observations = phen_observations.drop(columns=['phenotype code', 'key'])
+    phen_observations = phen_observations.drop(
+        columns=['phenotype code', 'key'])
 
     # upload
     client.save_table(table='Phenotype observations',
-                       data=phen_observations.drop_duplicates())
+                      data=phen_observations.drop_duplicates())
+
 
 if __name__ == "__main__":
 
     participants = get_staging_area_participants()
 
     db = Client(
-        environ['MOLGENIS_HOST'],
-        schema=environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=MOLGENIS_HOST_SCHEMA_TARGET,
+        token=MOLGENIS_TOKEN
     )
 
     # 1. Pedigree table mapping
