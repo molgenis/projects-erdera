@@ -38,7 +38,7 @@ SCHEMA_QUALITY_CONTROL = 'Quality Control'
 if environ.get('MOLGENIS_HOST'):
     MOLGENIS_HOST = environ['MOLGENIS_HOST']
 
-
+logging.basicConfig(level=logging.INFO)
 logging.captureWarnings(True)
 log = logging.getLogger("Staging Area Mapping")
 
@@ -648,9 +648,12 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         ['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
 
     if not phen_observations[data_entry_errors].empty:
-        logging.warning(f"Warning! For these observations {phen_observations[data_entry_errors]['part of clinical observation'].unique()} \
-        the excluded field is both true and false for the following phenotypic feature(s): \
-        {phen_observations[data_entry_errors]['type'].unique().tolist()} - removing the row(s)")
+        logging.info(
+            'Warning! For these observations %s the excluded field is both true and false for the following phenotypic feature(s): %s - removing the row(s)',
+            phen_observations[data_entry_errors]['part of clinical observation'].unique(
+            ),
+            phen_observations[data_entry_errors]['type'].unique().tolist()
+        )
 
         phen_observations = phen_observations[~data_entry_errors]
 
