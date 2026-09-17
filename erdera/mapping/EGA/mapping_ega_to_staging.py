@@ -2,7 +2,6 @@
 Fetch EGA data using the egaClient
 This script logs into the EGA API and fetches the metadata belonging to an EGA dataset (with provisional ID)
 """
-
 import os
 import logging
 from os import environ
@@ -72,6 +71,7 @@ if __name__ == "__main__":
     ega_output_data = {}
     endpoints = ['studies', 'samples', 'analyses', 'files', 'mappings/sample_file', 'mappings/analysis_sample', \
                  'mappings/study_analysis_sample', 'experiments', 'runs', 'mappings/run_sample', 'mappings/study_experiment_run_sample']
+    endpoints = ['files']
     client = EGASubmissionsClient()
     provisional_id = environ['PROVISIONAL_ID']
 
@@ -87,6 +87,7 @@ if __name__ == "__main__":
                 include_headers = False
             response = client.get_endpoint_dataset(provisional_id=provisional_id, endpoint=endpoint, include_headers=include_headers)
             dataset = pd.DataFrame(response.get('data'))
+            dataset['dataset_accession_id'] = provisional_id
             dataset['added by job'] = api_run_meta['id']   
             ega_output_data[endpoint_clean] = dataset
             api_run_meta[f'total number of {endpoint_clean}'] = dataset.shape[0]
@@ -125,17 +126,17 @@ if __name__ == "__main__":
                 schema= os.getenv('SCHEMA_JOBS'),
                 token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
-        molgenis.save_schema(table='Jobs Ega Api', data=api_run_meta_df)
+        molgenis.save_table(table='Jobs Ega Api', data=api_run_meta_df)
 
         if api_run_errors:
-            molgenis.save_schema(
+            molgenis.save_table(
                 table='Job errors', data=api_run_errors)
     
-    for key in ega_output_data.keys():        
+    for key in ega_output_data.keys():
         # import into the staging area 
         with Client(url=os.getenv('MOLGENIS_HOST'),
                     schema= os.getenv('SCHEMA_EGA_SOURCE'),
                     token=os.getenv('MOLGENIS_TOKEN')) as molgenis:
 
-            molgenis.save_schema(table=key, data=ega_output_data[key])
+            molgenis.save_table(table=key, data=ega_output_data[key])
     
