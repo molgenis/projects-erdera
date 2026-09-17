@@ -32,18 +32,25 @@ SCHEMA_GPAP_SOURCE = 'Staging Area Gpap'
 SCHEMA_ONTOLOGY_MAPPINGS = 'Ontology mappings'
 SCHEMA_ONTOLOGIES = 'CatalogueOntologies'
 MOLGENIS_HOST_SCHEMA_TARGET = 'erdera'
+OUTPUT_FILE = environ["OUTPUT_FILE"]
 
 if environ.get('MOLGENIS_HOST'):
     MOLGENIS_HOST = environ['MOLGENIS_HOST']
 
-
+# set logger
+log = logging.getLogger("Staging Area Mapping Participants")
+# write logs to an output file instead of to the screen
+logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
+# set level of the logger of the requests library
+logging.getLogger("requests").setLevel(logging.WARNING)
+# set level of the logger of the urllib3 library
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+# make sure warnings from the standard warning module are written to the log file
 logging.captureWarnings(True)
-log = logging.getLogger("Staging Area Mapping")
-
 
 def get_staging_area_experiments():
     """Retrieve metadata from /<staging area>/Experiments"""
-    logging.info('Retrieving required metadata')
+    log.info('Retrieving required metadata')
     with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
         return client_ind.get(
             table='Experiments',
@@ -155,6 +162,9 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
         organisations_mappings)  # link the official ror ontology as parent
     # add the 'parent' (i.e., the official ror organisation) to the df
     srDNA['parent_owner'] = srDNA['Owner'].map(organisations_mappings)
+
+    log.info('Uploading the following organisation(s): %s',
+             new_organisations_df['name'])
 
     # upload the new organisations
     client.save_table(table='Organisations',

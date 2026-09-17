@@ -34,18 +34,25 @@ SCHEMA_ONTOLOGY_MAPPINGS = 'Ontology mappings'
 SCHEMA_ONTOLOGIES = 'CatalogueOntologies'
 MOLGENIS_HOST_SCHEMA_TARGET = 'erdera'
 SCHEMA_QUALITY_CONTROL = 'Quality Control'
+OUTPUT_FILE = environ["OUTPUT_FILE"]
 
 if environ.get('MOLGENIS_HOST'):
     MOLGENIS_HOST = environ['MOLGENIS_HOST']
 
-logging.basicConfig(level=logging.INFO)
+# set logger
+log = logging.getLogger("Staging Area Mapping Participants")
+# write logs to an output file instead of to the screen
+logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
+# set level of the logger of the requests library
+logging.getLogger("requests").setLevel(logging.WARNING)
+# set level of the logger of the urllib3 library
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+# make sure warnings from the standard warning module are written to the log file
 logging.captureWarnings(True)
-log = logging.getLogger("Staging Area Mapping")
-
 
 def get_staging_area_participants():
     """Retrieve metadata from /<staging area>/Participants"""
-    logging.info('Retrieving required metadata')
+    log.info('Retrieving required metadata')
     with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
         return client_ind.get(
             table='Participants',
@@ -599,7 +606,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         # check if the individual has a clinical observations ID - otherwise the individual is present in the
         # GPAP staging area data but not in RD3
         if pd.isna(id):
-            logging.warning(
+            log.warning(
                 'Individual %s does not have a clinical observation ID. The individual is not included in the Phenotype Observations.',
                 pheno_obs['report_id']
             )
@@ -648,7 +655,7 @@ def build_import_phenotype_observations(client, data: pd.DataFrame):
         ['part of clinical observation', 'type'])['excluded'].transform('nunique') > 1
 
     if not phen_observations[data_entry_errors].empty:
-        logging.info(
+        log.warning(
             'Warning! For these observations %s the excluded field is both true and false for the following phenotypic feature(s): %s - removing the row(s)',
             phen_observations[data_entry_errors]['part of clinical observation'].unique(
             ),
