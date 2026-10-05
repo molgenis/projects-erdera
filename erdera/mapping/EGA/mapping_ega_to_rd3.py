@@ -1,32 +1,84 @@
-"""Map the EGA data from the staging area to RD3"""
+"""
+Map the EGA data from the staging area to RD3
+
+## For deployment
+
+1. Copy the contents of this script into the script editor UI
+2. Copy the following requirements into the 'dependencies' field
+3. Save and run
+
+### Dependencies
+
+pandas
+python-dotenv
+molgenis-emx2-pyclient
+"""
 
 import asyncio
-import re
-import os
 import logging
+import re
+import sys
 import tempfile
 import zipfile
+from os import environ
 from zipfile import ZipFile
 
 import pandas as pd
 from dotenv import load_dotenv
-
 from molgenis_emx2_pyclient.client import Client
 
 load_dotenv()
 
+# set environment variables
+MOLGENIS_HOST = 'http://localhost:8080/'
+MOLGENIS_TOKEN = environ['MOLGENIS_TOKEN']
+SCHEMA_EGA_SOURCE = 'Staging Area Ega'
+MOLGENIS_HOST_SCHEMA_TARGET = 'erdera'
+OUTPUT_FILE = environ["OUTPUT_FILE"]
+
+if environ.get('MOLGENIS_HOST'):
+    MOLGENIS_HOST = environ['MOLGENIS_HOST']
+
+# write logs to an output file instead of to the screen
+logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
+# set level of the logger of the requests library
+logging.getLogger("requests").setLevel(logging.WARNING)
+# set level of the logger of the urllib3 library
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+# make sure warnings from the standard warning module are written to the log file
 logging.captureWarnings(True)
-log = logging.getLogger("Staging Area Mapping")
+# set logger
+log = logging.getLogger("Staging Area Mapping EGA")
+
+if len(sys.argv) == 2:
+    print("EGA Dataset", sys.argv[1])
+    ACCESSION_ID = sys.argv[1]
+    log.info('Received arg: Dataset accession ID: %s',
+             ACCESSION_ID)
+    
+if environ.get('PROVISIONAL_ID'):
+    ACCESSION_ID = environ['PROVISIONAL_ID']
 
 def get_staging_area_data(endpoint: str):
     """Retrieve metadata from the staging area (/<staging area>/<endpoint>)"""
-    logging.info('Retrieving %s EGA information from staging area',
+    log.info('Retrieving %s EGA information from staging area',
                  endpoint)
-    with Client(os.environ['MOLGENIS_HOST'], token=os.environ['MOLGENIS_TOKEN']) as client_ind:
+    with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
         return client_ind.get(
             table=endpoint,
-            schema=os.environ['SCHEMA_EGA_SOURCE'],
+            schema=SCHEMA_EGA_SOURCE,
             as_df=True
+        )
+    
+def get_staging_area_files():
+    """Retrieve metadata from the staging area files"""
+    log.info('Retrieving files EGA information from staging area')
+    with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
+        return client_ind.get(
+            table='files',
+            schema=SCHEMA_EGA_SOURCE,
+            as_df=True,
+            query_filter=f'dataset_accession_id == {ACCESSION_ID}'
         )
     
 def add_collections(client: Client): 
@@ -90,12 +142,12 @@ async def upload_files(client: Client):
         with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
             my_zip.write(f'{tmp_dir}/Files.csv', 'Files.csv')
         # upload the zipped file
-        await client.upload_file(schema=os.environ['MOLGENIS_HOST_SCHEMA_TARGET'], file_path=zip_file_name)
+        await client.upload_file(schema=MOLGENIS_HOST_SCHEMA_TARGET, file_path=zip_file_name)
 
 def ega_to_files():
     """Map file metadata from the EGA staging area to RD3's Files"""
     # get EGA files
-    files = get_staging_area_data(endpoint='files')[[
+    files = get_staging_area_files()[[
         'accession_id', 'unencrypted_checksum', 'unencrypted_checksum_type', 'extension', 'dataset_accession_id'
     ]]
 
@@ -195,9 +247,11 @@ def create_linkages(client: Client, study: str, dataset: pd.Series):
 if __name__ == "__main__":
 
     db = Client(
-        os.environ['MOLGENIS_HOST'],
-        schema=os.environ['MOLGENIS_HOST_SCHEMA_TARGET'],
-        token=os.environ['MOLGENIS_TOKEN']
+        MOLGENIS_HOST,
+        schema=MOLGENIS_HOST_SCHEMA_TARGET,
+        token=MOLGENIS_TOKEN
+        # uncomment when deploying the script remotely
+        #job='${jobId}'
     )
 
     add_collections(client=db)
