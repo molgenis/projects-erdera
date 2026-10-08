@@ -129,6 +129,8 @@ class BuildTemplate:
             columnType = 'INTEGER'
         elif columnType in ['BOOL']:
             columnType = 'Select TRUE or FALSE'
+        elif columnType in ['DATETIME']:
+            columnType = 'DATETIME (yyyy-mm-dd hh:mm:ss)'
         
         return columnType
         
@@ -155,14 +157,8 @@ class BuildTemplate:
         sheet.write(0, col_index, column.name, current_header_style)
 
         # add comment which will appear when hovered over the field
-        columnType = self.rewrite_col_type(column=column)
-        description = column.get('description')
-
-        # comment text based on description and column type
-        comment_text = f'{description}'
-        if columnType:
-            comment_text = f'{description} \n\n {columnType}'    
-
+        comment_text = self.rewrite_col_type(column=column)
+        
         # format comment
         width = 200
         # wrap the text to prevent text from falling outside the comment box
