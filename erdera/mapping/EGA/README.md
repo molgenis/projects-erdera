@@ -9,7 +9,7 @@ See specification of the EGA metadata API [here](https://metadata.ega-archive.or
 Second, map the EGA metadata from the staging area to RD3 (`mapping_ega_to_rd3.py`). 
 
 - Files: the EGA file metadata is mapped to the RD3 `Files` table
-- Resources: the EGA study and dataset information is mapped to the RD3 `Resources` table
+- Collections: the EGA study and dataset information is mapped to the RD3 `Collections` table
 
 #### Running the scripts (locally)
 To run the scripts locally you need to create a `.env` file with the following parameters:
@@ -21,3 +21,26 @@ To run the scripts locally you need to create a `.env` file with the following p
  PROVISIONAL_ID (The EGA provisional ID of the dataset you want to map to RD3)
  SCHEMA_EGA_SOURCE (The EGA staging area)
 ```
+
+#### Deploying the scripts
+To run the `mapping_ega_to_staging` script remotely, you need to 
+
+1. Copy the contents of [this script](mapping_ega_to_staging.py) into the script editor UI
+2. Add the egaClient.py as an extra file and adjust the import so it imports from the file
+3. Copy the following requirements into the 'dependencies' field
+4. Save the script
+5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
+
+And to run the `mapping_ega_to_rd3` script remotely, you need to
+
+1. Copy the contents of [this script](mapping_ega_to_rd3.py) into the script editor UI
+2. Uncomment the job parameter in the client initialisation in the main function
+3. Copy the following requirements into the 'dependencies' field
+4. Save the script
+5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
+
+#### Dependencies
+
+pandas
+python-dotenv
+molgenis-emx2-pyclient

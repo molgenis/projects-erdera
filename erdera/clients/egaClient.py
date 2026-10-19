@@ -12,15 +12,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # set environment variables
-API_URL = ''
-CLIENT_ID = ''
-TOKEN_URL = ''
-
 USERNAME = None
 PASSWORD = None
+API_URL = 'https://metadata.ega-archive.org'
+
 if environ.get('USERNAME'):
     USERNAME = environ['USERNAME']
     PASSWORD = environ['PASSWORD']
+    CLIENT_ID = environ['CLIENT_ID']
+    TOKEN_URL = environ['TOKEN_URL']
+    
 OUTPUT_FILE = environ['OUTPUT_FILE']
 
 # write logs to an output file instead of to the screen
@@ -45,7 +46,7 @@ class EGASubmissionsClient:
         self.access_token = None
         self.refresh_token = None
         # initialize token creation
-        if USERNAME != None:
+        if USERNAME:
             self.get_tokens()
 
     def get_tokens(self):

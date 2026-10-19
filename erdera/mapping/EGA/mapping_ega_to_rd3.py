@@ -4,8 +4,10 @@ Map the EGA data from the staging area to RD3
 ## For deployment
 
 1. Copy the contents of this script into the script editor UI
-2. Copy the following requirements into the 'dependencies' field
-3. Save and run
+2. Uncomment the job parameter in the client initialisation in the main function
+3. Copy the following requirements into the 'dependencies' field
+4. Save the script
+5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
 
 ### Dependencies
 
@@ -50,11 +52,18 @@ logging.captureWarnings(True)
 # set logger
 log = logging.getLogger("Staging Area Mapping EGA")
 
-if len(sys.argv) == 2:
-    print("EGA Dataset", sys.argv[1])
+# if the script is deployed on the server, retrieve the dataset to migrate from the command line arguments
+if len(sys.argv) > 1:
     ACCESSION_ID = sys.argv[1]
+    if not ACCESSION_ID.startswith('EGAD'):
+        log.error('First argument is not the EGA dataset accession ID. The ID is formatted as EGAD<number>')
+        sys.exit('Error: wrong argument.')
+
     log.info('Received arg: Dataset accession ID: %s',
              ACCESSION_ID)
+else:
+    log.error('No argument was given. Please provide an EGA dataset accession ID.')
+    sys.exit('Error: no argument was provided.')
     
 if environ.get('PROVISIONAL_ID'):
     ACCESSION_ID = environ['PROVISIONAL_ID']
@@ -119,14 +128,14 @@ def add_collections(client: Client):
     # Note: this assumes all datasets in the table are part of this study
     study['number of participants'] = dataset['number of participants'].astype('Int64').sum()
 
-    # create linkage between study and datasets
-    create_linkages(client, study=study_accession_id, dataset=dataset['id'])
-
     # concat the resources table to include the EGA study and the dataset(s)
     collections = pd.concat([dataset, study])
 
     client.save_table(table='Collections', data=collections)
-    
+
+    # create linkage between study and datasets
+    create_linkages(client, study=study_accession_id, dataset=dataset['id'])
+
 async def upload_files(client: Client):
     """Zip the files and upload to RD3"""
     # get the files df
@@ -214,8 +223,14 @@ def ega_to_files():
     ### produced by experiment
     # analyses has the experiment ID in the description
     analyses = get_staging_area_data(endpoint='analyses')
+    if len(analyses) == 0:
+        log.error('There is no EGA Analyses data - this is required to map the linked experiment.')
+        sys.exit('Error: missing required analyses data')
     # analysis_sample has a sample accession id and an analysis accession id necessary to match the experiment to the correct file
     analysis_sample = get_staging_area_data(endpoint='analysis_sample')
+    if len(analysis_sample) == 0:
+        log.error('There is no EGA Analysis_sample data - this is required to map the linked experiment.')
+        sys.exit('Error: missing required analysis_sample data')
 
     # merge the dataframes to get the file accession id in one df with the experiment ID (as part of the description)
     merged_df = pd.merge(analyses, analysis_sample, left_on = 'accession_id', right_on='analysis_accession_id')

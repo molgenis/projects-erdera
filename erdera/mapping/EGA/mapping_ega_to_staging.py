@@ -5,8 +5,10 @@ This script logs into the EGA API and fetches the metadata belonging to an EGA d
 ## For deployment
 
 1. Copy the contents of this script into the script editor UI
-2. Copy the following requirements into the 'dependencies' field
-3. Save and run
+2. Add the egaClient.py as an extra file and adjust the import so it imports from the file
+3. Copy the following requirements into the 'dependencies' field
+4. Save the script
+5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
 
 ### Dependencies
 
@@ -113,11 +115,11 @@ def prepare_run_metadata():
 
 if __name__ == "__main__":
     
-    # OPTION 1: retrieving all metadata (you need access with an account)
-    endpoints = ['studies', 'samples', 'analyses', 'files', 'mappings/sample_file', 'mappings/analysis_sample', \
-                'mappings/study_analysis_sample', 'experiments', 'runs', 'mappings/run_sample', 'mappings/study_experiment_run_sample']
+    # OPTION 1: retrieving all metadata (you need access with authentication)
+    # endpoints = ['studies', 'samples', 'analyses', 'files', 'mappings/sample_file', 'mappings/analysis_sample', \
+    #            'mappings/study_analysis_sample', 'experiments', 'runs', 'mappings/run_sample', 'mappings/study_experiment_run_sample']
     
-    # OPTION 2: retrieving just the file metadata (you don't need access)
+    # OPTION 2: retrieving just the file metadata (you don't need authentication)
     endpoints = ['files']
 
     # initialise a client
