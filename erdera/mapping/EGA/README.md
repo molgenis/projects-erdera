@@ -41,6 +41,6 @@ And to run the `mapping_ega_to_rd3` script remotely, you need to
 
 #### Dependencies
 
-pandas
-python-dotenv
-molgenis-emx2-pyclient
+pandas  
+python-dotenv  
+molgenis-emx2-pyclient  
