@@ -43,3 +43,18 @@ To run the scripts locally you need to create a `.env` file with the following p
  SCHEMA_JOBS (The `jobs` database)
  SCHEMA_QUALITY_CONTROL (The `Quality Control` database)
 ```
+
+#### Deploying the scripts
+To run the scripts remotely, you need to 
+
+1. Copy the contents of the script into the script editor UI
+    - [Mapping the CNAG participant info to RD3](mapping_cnag_to_rd3.py)
+    - [Mapping the CNAG experiment info to RD3](mapping_cnag_experiments_to_rd3.py)
+2. Copy the following requirements into the 'dependencies' field
+3. Save and run
+
+#### Dependencies
+
+pandas  
+python-dotenv  
+molgenis-emx2-pyclient  

@@ -16,10 +16,10 @@ from zipfile import ZipFile
 import pandas as pd
 import requests
 from dotenv import load_dotenv
-
 from molgenis_emx2_pyclient import Client
-from erdera.clients.gpap.gpap_client_prod import GpapClient
+
 import erdera.clients.gpap.gpap_client_types as types
+from erdera.clients.gpap.gpap_client_prod import GpapClient
 from erdera.utils.index import date_now, date_today
 
 load_dotenv()
