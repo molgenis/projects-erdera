@@ -34,7 +34,7 @@ To run the `mapping_ega_to_staging` script remotely, you need to
 2. Add the egaClient.py as an extra file and adjust the import so it imports from the file
 3. Copy the following requirements into the 'dependencies' field
 4. Save the script
-5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
+5. Run the script, ensure you enter the EGA dataset accession ID as a `Parameter` of the data you want to migrate
 
 And to run the `mapping_ega_to_rd3` script remotely, you need to
 
@@ -42,7 +42,7 @@ And to run the `mapping_ega_to_rd3` script remotely, you need to
 2. Uncomment the job parameter in the client initialisation in the main function
 3. Copy the following requirements into the 'dependencies' field
 4. Save the script
-5. Run the script, ensure you enter the EGA dataset accession ID of the data you want to migrate
+5. Run the script, ensure you enter the EGA dataset accession ID as a `Parameter` of the data you want to migrate
 
 #### Dependencies
 
