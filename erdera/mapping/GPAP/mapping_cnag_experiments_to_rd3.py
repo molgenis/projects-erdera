@@ -14,8 +14,12 @@ python-dotenv
 molgenis-emx2-pyclient
 
 """
+import asyncio
 import logging
+import tempfile
+import zipfile
 from os import environ
+from zipfile import ZipFile
 
 import pandas as pd
 import numpy as np
@@ -135,7 +139,6 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
     """Upload the GPAP owners as organisations in CatalogueOntologies"""
     client = Client(
         MOLGENIS_HOST,
-        # schema=SCHEMA_ONTOLOGIES,
         token=MOLGENIS_TOKEN
     )
 
@@ -158,18 +161,22 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
     # for each new gpap owner, the rd3 organisations needs to be mapped,
     # additionally, they need to be linked to each other.
     new_organisations_df = pd.DataFrame({'name': new_organisations})
+    # update the organisations with the parent (i.e., the official institute)
+    organisations['parent'] = organisations['name'].map(organisations_mappings)
     new_organisations_df['parent'] = new_organisations_df['name'].map(
         organisations_mappings)  # link the official ror ontology as parent
     # add the 'parent' (i.e., the official ror organisation) to the df
     srDNA['parent_owner'] = srDNA['Owner'].map(organisations_mappings)
 
-    log.info('Uploading the following organisation(s): %s',
+    log.info('Adding the following organisation(s): %s',
              new_organisations_df['name'])
 
+    # merge the original organisations (with updated parents) with the new organisations
+    organisation_to_upload = pd.merge(organisations, new_organisations_df, how='outer')
     # upload the new organisations
     client.save_table(table='Organisations',
                       schema=SCHEMA_ONTOLOGIES,
-                      data=new_organisations_df)
+                      data=organisation_to_upload)
 
     # upload the new organisation to ontology mappings
     new_organisations_df = new_organisations_df.rename(columns={
@@ -290,11 +297,17 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
         erns = row['erns']
         owner = row['Owner']
         parent = row['parent_owner']
-        if not pd.isna(erns):
-            srDNA.loc[index, 'affiliated organisations'] = ','.join(
+        srDNA.loc[index, 'affiliated organisations'] = ','.join(
                 str(field) for field in [erns, owner, parent] if pd.notna(field))
-    add_organisations_to_individuals(client=client, ind_org_dict=dict(
-        zip(srDNA['individuals'], srDNA['affiliated organisations'])))
+
+    # create a dict of all affiliated organisations per individual
+    ind_org_dict = (
+        srDNA.groupby('individuals')['affiliated organisations']
+        .apply(lambda x: ','.join(x.unique()))
+        .to_dict()
+        )
+    # add the organisations to the individuals table
+    asyncio.run(add_organisations_to_individuals(client=client, ind_org_dict=ind_org_dict))
 
     # remove erns and owner columns
     srDNA = srDNA.drop(columns=['erns', 'Owner'])
@@ -309,12 +322,23 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     client.save_table(table='Experiments srDNA', data=srDNA)
 
 
-def add_organisations_to_individuals(client: Client, ind_org_dict: dict):
+async def add_organisations_to_individuals(client: Client, ind_org_dict: dict):
     """Add the submitting organisations to the individuals table"""
     individuals = client.get(table='Individuals', as_df=True)
     individuals['affiliated organisations'] = individuals['id'].map(
         ind_org_dict)
-    client.save_table(table='Individuals', data=individuals)
+    #client.save_table(table='Individuals', data=individuals)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        individuals.to_csv(f'{tmp_dir}/Individuals.csv', index=False)
+
+        # initialise an archive 
+        zip_file_name=f'{tmp_dir}/archive.zip'
+
+        # zip the data
+        with ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as my_zip:
+            my_zip.write(f'{tmp_dir}/Individuals.csv', 'Individuals.csv')
+        # upload the zipped file
+        await client.upload_file(schema=MOLGENIS_HOST_SCHEMA_TARGET, file_path=zip_file_name)
 
 
 if __name__ == "__main__":
