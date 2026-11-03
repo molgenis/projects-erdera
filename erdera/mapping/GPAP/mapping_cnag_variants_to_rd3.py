@@ -67,6 +67,7 @@ def get_staging_area_regions():
 
     # convert to list
     regions['regions'] = regions['regions'].apply(ast.literal_eval)
+    regions = regions[regions['regions'].str.len()>0] # remove rows with empty list
     # explode the list to have each element as a row
     tmp = regions.explode('regions').reset_index(drop=True)
     result = pd.concat(
@@ -85,7 +86,71 @@ def get_staging_area_regions():
         axis=1
     )
 
-    return regions  
+    return regions
+
+def get_staging_area_genes():
+    """Retrieve metadata from /<staging area>/Participants"""
+    log.info('Retrieving required metadata')
+    with Client(MOLGENIS_HOST, token=MOLGENIS_TOKEN) as client_ind:
+        participants = client_ind.get(
+            table='Participants',
+            schema=SCHEMA_GPAP_SOURCE,
+            as_df=True
+        )
+
+    # get the region field
+    genes = participants[['genes', 'report_id']]
+
+    genes = genes.dropna() # drop empty records
+
+    # convert to list
+    genes['genes'] = genes['genes'].apply(ast.literal_eval)
+    genes = genes[genes['genes'].str.len()>0] # remove rows with empty list
+    # explode the list to have each element as a row
+    tmp = genes.explode('genes').reset_index(drop=True)
+    result = pd.concat(
+        [tmp.drop(columns='genes'),
+        pd.json_normalize(tmp['genes'])],
+        axis=1
+    )
+
+    # explode the list of variants to have each element as a row
+    genes = result.explode('variants', ignore_index=True)
+    genes = pd.concat(
+        [
+            genes.drop(columns='variants'),
+            pd.json_normalize(genes['variants'])
+        ],
+        axis=1
+    )
+
+    #genes['start_pos'] = genes['start_pos'].astype('Int64')
+    #genes['end_pos'] = genes['end_pos'].astype('Int64')
+
+    genes['region'] = (
+        genes[["chromosome", "start_pos", "end_pos"]]
+        .astype(str)
+        .fillna("")
+        .agg(":".join, axis=1)
+        .str.strip(":")
+        )
+    
+    genes['region'] = (
+        genes["chromosome"].fillna("").astype(str)
+        + ":" +
+        genes["start_pos"].astype('Int64').astype(str).replace('<NA>', '')
+        + ":" +
+        genes["end_pos"].astype('Int64').astype(str).replace('<NA>', '')
+    ).str.strip(':')
+
+    genes["id"] = (
+        genes[["region", "sv_type"]]
+        .fillna("")
+        .agg("_".join, axis=1)
+        .str.strip("_")
+        )
+
+    return genes
 
 def build_import_variants(client: Client, regions: pd.DataFrame):
     # missing: Gene HGVS, gDNA, cDNA, protein, 
@@ -111,7 +176,6 @@ def build_import_variants(client: Client, regions: pd.DataFrame):
     genomic_variants['stop position'] = genomic_variants['stop position'].astype('Int64')
     
     genomic_variants.drop_duplicates().to_csv('', index=False)
-    # TODO: check out these duplicates to see if they are about the same variant or not 
 
 def build_import_var_analyses(client: Client, regions: pd.DataFrame):
     # create variant interpretation analyses
@@ -191,6 +255,7 @@ def build_import_var_discussions(client: Client, regions: pd.DataFrame, id_auto:
 if __name__ == "__main__":
 
     regions = get_staging_area_regions()
+    genes = get_staging_area_genes()
 
     db = Client(
         MOLGENIS_HOST,
@@ -202,3 +267,5 @@ if __name__ == "__main__":
     id_auto = build_import_var_analyses(client=db, regions=regions)
     id_auto = build_import_var_interpretations(client=db, regions=regions, id_auto=id_auto)
     build_import_var_discussions(client=db, regions=regions, id_auto=id_auto)
+
+# TODO: why are the variant interpretations analyses without a variant interpretation?
