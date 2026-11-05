@@ -278,8 +278,8 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     srDNA[field_name] = srDNA[field_name].replace(matches)
 
     tmp = srDNA.loc[srDNA[field_name].isin(
-        unmatched)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology term equivalent
+unmatched)].index  # get the indices of the unmatched rows
+    # clear values without an RD3 ontology term equivalent.
     srDNA.loc[tmp, field_name] = np.nan
 
     # map affiliated organisations based on erns and owner columns
