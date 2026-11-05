@@ -213,7 +213,7 @@ def upload_samples(client: Client, data: pd.DataFrame):
 
     tmp = samples_srDNA.loc[samples_srDNA[field_name].isin(
         unmatched)].index  # get the indices of the rows to remove (no match)
-    # remove rows without a RD3 ontology term equivalent
+    # clear values without an RD3 ontology term equivalent.
     samples_srDNA.loc[tmp, field_name] = np.nan
 
     # upload samples
