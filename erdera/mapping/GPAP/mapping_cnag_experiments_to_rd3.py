@@ -162,9 +162,15 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
     # additionally, they need to be linked to each other.
     new_organisations_df = pd.DataFrame({'name': new_organisations})
     # update the organisations with the parent (i.e., the official institute)
-    organisations['parent'] = organisations['name'].map(organisations_mappings)
+    mapped = organisations['name'].map(organisations_mappings)
+    mask = mapped.notna() & (mapped != organisations['parent'])
+    changed = organisations.loc[mask].copy()
+    changed['parent'] = mapped.loc[changed.index]
+
+    # assign parents for newly created organisations
     new_organisations_df['parent'] = new_organisations_df['name'].map(
         organisations_mappings)  # link the official ror ontology as parent
+    
     # add the 'parent' (i.e., the official ror organisation) to the df
     srDNA['parent_owner'] = srDNA['Owner'].map(organisations_mappings)
 
@@ -172,10 +178,10 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
              new_organisations_df['name'])
 
     # merge the original organisations (with updated parents) with the new organisations
-    organisation_to_upload = pd.merge(organisations, new_organisations_df, how='outer')
+    organisation_to_upload = pd.concat([changed, new_organisations_df], ignore_index=True)
     # upload the new organisations
-    client.save_table(table='Organisations',
-                      schema=SCHEMA_ONTOLOGIES,
+    client.save_table(table='Organisations', 
+                      schema=SCHEMA_ONTOLOGIES, 
                       data=organisation_to_upload)
 
     # upload the new organisation to ontology mappings
@@ -184,14 +190,11 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
         'parent': 'new value'
     })
     new_organisations_df['source'] = 'Owner'
-    client.save_table(
-        table='Organisations',
-        schema=SCHEMA_ONTOLOGY_MAPPINGS,
-        data=new_organisations_df
-    )
+    client.save_table(table='Organisations', 
+                      schema=SCHEMA_ONTOLOGY_MAPPINGS, 
+                      data=new_organisations_df)
 
     return srDNA
-
 
 def upload_samples(client: Client, data: pd.DataFrame):
     """Build and import the sample metadata based on GPAP's experiments. """
@@ -211,7 +214,7 @@ def upload_samples(client: Client, data: pd.DataFrame):
     tmp = samples_srDNA.loc[samples_srDNA[field_name].isin(
         unmatched)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 ontology term equivalent
-    samples_srDNA = samples_srDNA.drop(tmp, axis=0)
+    samples_srDNA.loc[tmp, field_name] = np.nan
 
     # upload samples
     client.save_table(table='Samples srDNA', data=samples_srDNA)
@@ -267,7 +270,7 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     tmp = srDNA.loc[srDNA[field_name].isin(
         unmatched)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 ontology term equivalent
-    srDNA = srDNA.drop(tmp, axis=0)
+    srDNA.loc[tmp, field_name] = np.nan
 
     # map library source
     field_name = 'library source'
@@ -277,7 +280,7 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     tmp = srDNA.loc[srDNA[field_name].isin(
         unmatched)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 ontology term equivalent
-    srDNA = srDNA.drop(tmp, axis=0)
+    srDNA.loc[tmp, field_name] = np.nan
 
     # map affiliated organisations based on erns and owner columns
     # upload the owners as organisations
@@ -290,7 +293,7 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     tmp = srDNA.loc[srDNA[field_name].isin(
         unmatched)].index  # get the indices of the rows to remove (no match)
     # remove rows without a RD3 ontology term equivalent
-    srDNA = srDNA.drop(tmp, axis=0)
+    srDNA.loc[tmp, field_name] = np.nan
 
     srDNA['affiliated organisations'] = None
     for index, row in srDNA.iterrows():
@@ -302,10 +305,12 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
 
     # create a dict of all affiliated organisations per individual
     ind_org_dict = (
-        srDNA.groupby('individuals')['affiliated organisations']
-        .apply(lambda x: ','.join(x.unique()))
-        .to_dict()
-        )
+        srDNA.melt(id_vars='individuals', value_vars=['erns', 'Owner', 'parent_owner'])
+        .dropna(subset=['value'])
+        .groupby('individuals')['value']
+        .apply(lambda orgs: ','.join(sorted(set(orgs))))
+        .to_dict())
+    
     # add the organisations to the individuals table
     asyncio.run(add_organisations_to_individuals(client=client, ind_org_dict=ind_org_dict))
 
