@@ -291,7 +291,7 @@ unmatched)].index  # get the indices of the unmatched rows
     srDNA[field_name] = srDNA[field_name].replace(matches)
 
     tmp = srDNA.loc[srDNA[field_name].isin(
-        unmatched)].index  # get the indices of the rows to remove (no match)
+    # clear values without an RD3 ontology term equivalent.
     # remove rows without a RD3 ontology term equivalent
     srDNA.loc[tmp, field_name] = np.nan
 
