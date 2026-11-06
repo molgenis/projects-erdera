@@ -42,7 +42,7 @@ if environ.get('MOLGENIS_HOST'):
     MOLGENIS_HOST = environ['MOLGENIS_HOST']
 
 # set logger
-log = logging.getLogger("Staging Area Mapping Participants")
+log = logging.getLogger("Staging Area Mapping Experiments")
 # write logs to an output file instead of to the screen
 logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
 # set level of the logger of the requests library
