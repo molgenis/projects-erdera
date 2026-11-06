@@ -113,7 +113,8 @@ def build_import_pedigree_table(client, data: pd.DataFrame):
 
 def build_import_individuals_table(client, data: pd.DataFrame):
     """Map staging area data into the Individuals table"""
-    individuals = data[['id', 'sex', 'lifeStatus', 'report_date', 'last_modification_date', 'report_id', 'baselineage']] \
+    individuals = data[['id', 'sex', 'lifeStatus', 'report_date', 'last_modification_date', 'report_id', 'baselineage',
+                        'famid']] \
         .rename(columns={
             'id': 'alternate ids',
             'sex': 'gender at birth',
@@ -121,7 +122,8 @@ def build_import_individuals_table(client, data: pd.DataFrame):
             'report_date': 'date created at source',
             'last_modification_date': 'date updated at source',
             'report_id': 'id',
-            'baselineage': 'age at enrolment'
+            'baselineage': 'age at onset',
+            'famid':'pedigree'
         })
 
     # TODO: retrieve this from mappings schema
@@ -134,14 +136,15 @@ def build_import_individuals_table(client, data: pd.DataFrame):
     # TODO: retrieve this from mappings schema
     gender_dict = {
         'M': 'assigned male at birth',
-        'F': 'assigned female at birth'
+        'F': 'assigned female at birth',
+        'U': 'assigned U at birth'
     }
     individuals['gender at birth'] = individuals['gender at birth'].map(
         gender_dict)
 
     # map age group
-    age = pd.to_numeric(individuals['age at enrolment'], errors='coerce')
-    individuals['age at enrolment'] = "P" + \
+    age = pd.to_numeric(individuals['age at onset'], errors='coerce')
+    individuals['age at onset'] = "P" + \
         age.astype('Int64').astype('string') + "Y"
 
     # upload individuals data to RD3
@@ -439,10 +442,11 @@ def match_ontologies(gpap_data: set, rd3_ontology_name: str, qc_correct: str):
 
 def build_import_disease_history(client, data: pd.DataFrame):
     """Map staging area data to disease history data"""
-    disease_history = data[['onset', 'diagnosis', 'report_id']] \
+    disease_history = data[['onset', 'diagnosis', 'report_id', 'disorders']] \
         .rename(columns={
             'onset': 'age group at onset',
-            'diagnosis': 'disease'
+            'diagnosis': 'clinical diagnosis',
+            'disorders': 'molecular diagnosis'
         })
 
     # the auto IDs are necessary from clinical observations
@@ -466,25 +470,24 @@ def build_import_disease_history(client, data: pd.DataFrame):
         clinical_obs.loc[clinical_obs['individuals'] ==
                          report_id, "age group at onset"] = age_group
 
-        # get all diseases from this individual
-        diseases_all = parse_entries(disease_elem.get('disease'))
-
-        for disease in diseases_all:
-            disease_ordo = disease.get('ordo')
+        # get all clinical diagnoses from this individual
+        clin_diag_all = parse_entries(disease_elem.get('clinical diagnosis'))
+        for diagnosis in clin_diag_all:
+            disease_ordo = diagnosis.get('ordo')
             if not disease_ordo:
                 continue
 
             name = disease_ordo.get('name')
             code = disease_ordo.get('id').split(
                 ':')[1].strip()  # remove prefix and whitespace
-            status = disease.get('status')
+            status = diagnosis.get('status')
 
             if name is None:
                 print(report_id)
 
             disease_history2.append({
                 'part of clinical observation': id,
-                'disease': name,
+                'clinical diagnosis': name,
                 'disease status': status,  # e.g. confirmed, suspected
                 'disease code': code
             })
@@ -497,15 +500,15 @@ def build_import_disease_history(client, data: pd.DataFrame):
     non_matches, mappings = match_diseases(diseases_set)
 
     disease_history['key'] = list(
-        zip(disease_history['disease'], disease_history['disease code']))
+        zip(disease_history['clinical diagnosis'], disease_history['disease code']))
 
     # map the corrections
     disease_history.loc[disease_history['key'].isin(
-        mappings), 'disease'] = disease_history['key'].map(mappings)
+        mappings), 'clinical diagnosis'] = disease_history['key'].map(mappings)
     # remove the non-matches
     # first remake the key so the corrections are incorporated
     disease_history['key'] = list(
-        zip(disease_history['disease'], disease_history['disease code']))
+        zip(disease_history['clinical diagnosis'], disease_history['disease code']))
     disease_history = disease_history[~disease_history['key'].isin(
         non_matches)]
 
