@@ -42,7 +42,7 @@ if environ.get('MOLGENIS_HOST'):
     MOLGENIS_HOST = environ['MOLGENIS_HOST']
 
 # set logger
-log = logging.getLogger("Staging Area Mapping Participants")
+log = logging.getLogger("Staging Area Mapping Experiments")
 # write logs to an output file instead of to the screen
 logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
 # set level of the logger of the requests library
@@ -84,7 +84,7 @@ def get_mappings_name(rd3_field_name: str):
         'library strategy': ('Experiment types', 'library_strategy'),
         'library source': ('Library source', 'library_source'),
         'tissue type': ('Tissue types', 'tissue'),
-        'erns': ('Erns', 'erns'),
+        'affiliated networks': ('Erns', 'erns'),
         'organisations': ('Organisations', 'Owners')
     }
     return RD3_dict.get(rd3_field_name)
@@ -135,8 +135,8 @@ def match_ontology(gpap_data: list):
     return mappings_dict, unmatched
 
 
-def map_owner_to_organisation(srDNA: pd.DataFrame):
-    """Upload the GPAP owners as organisations in CatalogueOntologies"""
+def map_submitter_to_organisation(submitters: list):
+    """Upload the GPAP owners (submitters) as organisations in CatalogueOntologies"""
     client = Client(
         MOLGENIS_HOST,
         token=MOLGENIS_TOKEN
@@ -151,14 +151,11 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
     organisations_mappings = dict(zip(get_data('organisations')[
                                   'incoming value'], get_data('organisations')['new value']))
 
-    # gather all unique owners as a list
-    owners = srDNA['Owner'].unique().tolist()
-
     # get the new organisations
     new_organisations = [
-        owner for owner in owners if owner not in organisations['name'].to_list()]
+        submitter for submitter in submitters if submitter not in organisations['name'].to_list()]
 
-    # for each new gpap owner, the rd3 organisations needs to be mapped,
+    # for each new gpap submitter, the rd3 organisations needs to be mapped,
     # additionally, they need to be linked to each other.
     new_organisations_df = pd.DataFrame({'name': new_organisations})
     # update the organisations with the parent (i.e., the official institute)
@@ -172,7 +169,7 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
         organisations_mappings)  # link the official ror ontology as parent
     
     # add the 'parent' (i.e., the official ror organisation) to the df
-    srDNA['parent_owner'] = srDNA['Owner'].map(organisations_mappings)
+    #samples_srDNA['parent_owner'] = samples_srDNA['submitter'].map(organisations_mappings)
 
     log.info('Adding the following organisation(s): %s',
              new_organisations_df['name'])
@@ -189,21 +186,23 @@ def map_owner_to_organisation(srDNA: pd.DataFrame):
         'name': 'incoming value',
         'parent': 'new value'
     })
-    new_organisations_df['source'] = 'Owner'
+    new_organisations_df['source'] = 'Owner' # GPAP field source
     client.save_table(table='Organisations', 
                       schema=SCHEMA_ONTOLOGY_MAPPINGS, 
                       data=new_organisations_df)
 
-    return srDNA
+    # return samples_srDNA
 
 def upload_samples(client: Client, data: pd.DataFrame):
     """Build and import the sample metadata based on GPAP's experiments. """
 
-    samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID', 'ExperimentID']]\
+    samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID', 'ExperimentID', 'erns', 'Owner']]\
         .rename(columns={
             'tissue': 'tissue type',
             'Participant_ID': 'individuals',
-            'ExperimentID': 'id'
+            'ExperimentID': 'id',
+            'erns': 'affiliated networks',
+            'Owner': 'submitter'
         })
 
     # map tissue type
@@ -216,16 +215,40 @@ def upload_samples(client: Client, data: pd.DataFrame):
     # clear values without an RD3 ontology term equivalent.
     samples_srDNA.loc[tmp, field_name] = np.nan
 
+    # map submitter based on Owner field
+    # upload the submitters as organisations
+    map_submitter_to_organisation(submitters=samples_srDNA['submitter'].unique().tolist())
+
+    # map the affiliated networks (ERNs)
+    field_name = 'affiliated networks'
+    matches, unmatched = match_ontology(gpap_data=samples_srDNA[field_name])
+    samples_srDNA[field_name] = samples_srDNA[field_name].replace(matches)
+
+    tmp = samples_srDNA.loc[samples_srDNA[field_name].isin(
+        unmatched)].index
+    # clear values without an RD3 ontology term equivalent.
+    # remove rows without a RD3 ontology term equivalent
+    samples_srDNA.loc[tmp, field_name] = np.nan
+
+    # create mapping per individual of the submitter and affiliated networks
+    mapping = (
+        samples_srDNA.groupby("individuals")
+       .agg({
+           "submitter": lambda x: ",".join(pd.unique(x.dropna().astype(str))),
+           "affiliated networks": lambda x: ",".join(pd.unique(x.dropna().astype(str)))
+       })
+       .to_dict("index")
+    )
+
     # upload samples
     client.save_table(table='Samples srDNA', data=samples_srDNA)
 
+    return mapping
 
-def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
+def upload_srDNA_experiments(client: Client, data: pd.DataFrame, mapping: dict):
     """This function maps GPAP experiments to srDNA experiments in RD3"""
     srDNA = data[['ExperimentID', 'LocalExperimentID',
                   'kit',
-                  'Owner',
-                  'erns',
                   'project', 'subproject',
                   'Participant_ID',
                   'library_strategy',
@@ -278,45 +301,22 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame):
     srDNA[field_name] = srDNA[field_name].replace(matches)
 
     tmp = srDNA.loc[srDNA[field_name].isin(
-unmatched)].index  # get the indices of the unmatched rows
+        unmatched)].index  # get the indices of the unmatched rows
     # clear values without an RD3 ontology term equivalent.
     srDNA.loc[tmp, field_name] = np.nan
 
-    # map affiliated organisations based on erns and owner columns
-    # upload the owners as organisations
-    srDNA = map_owner_to_organisation(srDNA=srDNA)
+    # set submitter
+    srDNA["submitter"] = srDNA["individuals"].map(
+        lambda x: mapping.get(x, {}).get("submitter")
+    )
 
-    field_name = 'erns'
-    matches, unmatched = match_ontology(gpap_data=srDNA[field_name])
-    srDNA[field_name] = srDNA[field_name].replace(matches)
-
-    tmp = srDNA.loc[srDNA[field_name].isin(
-        unmatched)].index
-    # clear values without an RD3 ontology term equivalent.
-    # remove rows without a RD3 ontology term equivalent
-    srDNA.loc[tmp, field_name] = np.nan
-
-    srDNA['affiliated organisations'] = None
-    for index, row in srDNA.iterrows():
-        erns = row['erns']
-        owner = row['Owner']
-        parent = row['parent_owner']
-        srDNA.loc[index, 'affiliated organisations'] = ','.join(
-                str(field) for field in [erns, owner, parent] if pd.notna(field))
-
-    # create a dict of all affiliated organisations per individual
-    ind_org_dict = (
-        srDNA.melt(id_vars='individuals', value_vars=['erns', 'Owner', 'parent_owner'])
-        .dropna(subset=['value'])
-        .groupby('individuals')['value']
-        .apply(lambda orgs: ','.join(sorted(set(orgs))))
-        .to_dict())
+    # set affiliated networks (ERNs)
+    srDNA["affiliated networks"] = srDNA["individuals"].map(
+            lambda x: mapping.get(x, {}).get("affiliated networks")
+        )
     
     # add the organisations to the individuals table
-    asyncio.run(add_organisations_to_individuals(client=client, ind_org_dict=ind_org_dict))
-
-    # remove erns and owner columns
-    srDNA = srDNA.drop(columns=['erns', 'Owner'])
+    asyncio.run(add_organisations_to_individuals(client=client, mapping = mapping))
 
     # local experiment id
     srDNA['local experiment id'] = srDNA['id']
@@ -328,11 +328,19 @@ unmatched)].index  # get the indices of the unmatched rows
     client.save_table(table='Experiments srDNA', data=srDNA)
 
 
-async def add_organisations_to_individuals(client: Client, ind_org_dict: dict):
+async def add_organisations_to_individuals(client: Client, mapping: dict):
     """Add the submitting organisations to the individuals table"""
     individuals = client.get(table='Individuals', as_df=True)
-    individuals['affiliated organisations'] = individuals['id'].map(
-        ind_org_dict)
+    # set submitter
+    individuals["submitter"] = individuals["id"].map(
+        lambda x: mapping.get(x, {}).get("submitter")
+    )
+
+    # set affiliated networks (ERNs)
+    individuals["affiliated networks"] = individuals["id"].map(
+            lambda x: mapping.get(x, {}).get("affiliated networks")
+        )
+    
     #client.save_table(table='Individuals', data=individuals)
     with tempfile.TemporaryDirectory() as tmp_dir:
         individuals.to_csv(f'{tmp_dir}/Individuals.csv', index=False)
@@ -358,5 +366,5 @@ if __name__ == "__main__":
     )
 
     # build and import srDNA experiments and samples
-    upload_samples(client=db, data=experiments)
-    upload_srDNA_experiments(client=db, data=experiments)
+    mapping = upload_samples(client=db, data=experiments)
+    upload_srDNA_experiments(client=db, data=experiments, mapping = mapping)
