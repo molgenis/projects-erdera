@@ -251,7 +251,13 @@ class BuildTemplate:
                         'Library source',
                         'Sequencing platforms',
                         'Units',
-                        'Library layout'
+                        'Library layout',
+                        'Sequencing enrichment kits',
+                        'Enrichment kit manufacturers',
+                        'Extraction kits',
+                        'Library prep kit manufacturers',
+                        'Library preparation kits', 
+                        'Sample collection methods'
                     ]:
                         query_filter = 'tags=="erdera"'
                         if ONTOLOGY_TAG != "":
