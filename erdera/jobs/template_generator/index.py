@@ -191,6 +191,7 @@ class BuildTemplate:
 
     def add_draft(self,
                   sheet,
+                  sheet_name: str,
                   styles: WorkbookStyles,
                   index: int):
         
@@ -205,11 +206,26 @@ class BuildTemplate:
             # get column letter and set template col to this range 
             lookups_col = lookup['lookups_col']
             lookups_col_index = lookup['lookups_col_index']
+        else: # if not, create the lookup
+            lookups_col = get_column_letter(self.lookups_col_index+1)
+            lookups_col_index = self.lookups_col_index
+        
+        lookup = { # create lookup
+                    'name': 'Boolean',
+                    'data': [{'name':True}, {'name':False}],
+                    'lookups_col': lookups_col,
+                    'lookups_col_index': lookups_col_index,
+                    'template_sheet': sheet_name,
+                    'template_col': get_column_letter(index+1),
+                    'template_col_index': index,
+                    'formula': f"=lookups!{lookups_col}2:{lookups_col}3"
+                }
+        self.lookups.append(lookup)
         
         sheet.write(0, index, 'mg_draft', current_header_style)
 
         # add comment which will appear when hovered over the field
-        comment_text = "Set to TRUE if you want to save the record as draft."
+        comment_text = "Set to TRUE if you want to save the record as draft which prevents migration."
         
         # write comment
         sheet.write_comment(0, index, comment_text)
@@ -351,8 +367,9 @@ class BuildTemplate:
         new_sheet.autofit()
 
         self.add_draft(sheet = new_sheet, 
-                  index=index,
-                  styles=styles)
+                       sheet_name = sheet_name,
+                       index=index,
+                       styles=styles)
 
     def build(self, metadata: Schema):
         """Build template"""
