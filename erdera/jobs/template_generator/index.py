@@ -46,9 +46,7 @@ if len(sys.argv) >= 2:
     log.info('Received args: schema=%s, tables=%s, tag=%s',
              SCHEMA, TABLES, ONTOLOGY_TAG)
 
-
 client = Client(url=HOST, token=environ['MOLGENIS_TOKEN'])
-
 
 class WorkbookStyles(TypedDict):
     """Workbook formats"""
@@ -152,6 +150,10 @@ class BuildTemplate:
         """
         current_header_style = styles['header_default']
         if self.column_is_required(column=column):
+            current_header_style = styles['header_required']
+        
+        # temporarly added to ensure the id col in the Files template is marked as required
+        if self.tables[0] == 'Files' and column.name == 'id':
             current_header_style = styles['header_required']
 
         sheet.write(0, col_index, column.name, current_header_style)
@@ -360,6 +362,14 @@ class BuildTemplate:
                 for row_index in range(1, self.max_template_rows):
                     new_sheet.write(row_index,
                                     index,
+                                    None,
+                                    styles['cell_required'])
+
+            # temporarly added to mark the ID field as required for the files template
+            if self.tables[0] == 'Files':
+                for row_index in range(1, self.max_template_rows):
+                    new_sheet.write(row_index,
+                                    0,
                                     None,
                                     styles['cell_required'])
 
