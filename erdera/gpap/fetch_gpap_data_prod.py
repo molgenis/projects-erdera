@@ -195,6 +195,12 @@ if __name__ == "__main__":
     participants_df = pd.DataFrame(all_participants['data'])
     experiments_df = pd.DataFrame(all_experiments['data'])
 
+    # select only the processed = TRUE experiments
+    experiments_df = experiments_df[experiments_df['processed']]
+    # and the participants that have at least one processed experiment
+    participants_IDs = experiments_df['Participant_ID']
+    participants_df = participants_df[participants_df['report_id'].isin(participants_IDs)]
+
     participants_df['added by job'] = api_run_meta['id']
     experiments_df['added by job'] = api_run_meta['id']
 
