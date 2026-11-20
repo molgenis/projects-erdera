@@ -1,5 +1,18 @@
 """
 Script to publish data from staging areas to a the ERDERA production database.
+
+## For deployment
+
+1. Copy the contents of this script into the script editor UI
+2. Make sure you add (uncomment) the job paramater on line 134 (job="${jobId}")
+3. Copy the following requirements into the 'dependencies' field
+4. Save and run
+
+### Dependencies
+
+pandas
+python-dotenv
+molgenis-emx2-pyclient
 """
 import asyncio
 from dotenv import load_dotenv
@@ -110,7 +123,7 @@ def get_staging_areas(client: Client):
     # get the schemas to be migrated
     schemas = [
         schema for schema in schema_ids
-        if schema.startswith("Staging area") and schema not in exclude
+        if schema.startswith("Staging Area") and schema not in exclude
     ]
     return schemas
 
