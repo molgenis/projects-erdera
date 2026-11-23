@@ -91,31 +91,31 @@ def rows(data: pd.DataFrame, key: str = 'id') -> list:
 
 
 @pytest.fixture
-def run(molgenis, run_script):
-    def run_with(experiments=None):
+def run_mapping(molgenis, run_script):
+    def seed_and_run(experiments=None):
         seed(molgenis, experiments)
         run_script(SCRIPT)
         return molgenis
-    return run_with
+    return seed_and_run
 
 
-def test_connects_with_host_and_token_from_environment(run):
-    molgenis = run()
+def test_connects_with_host_and_token_from_environment(run_mapping):
+    molgenis = run_mapping()
 
     assert molgenis.clients
     assert {client.url for client in molgenis.clients} == {'https://molgenis.test/'}
     assert {client.token for client in molgenis.clients} == {'test-token'}
 
 
-def test_uploads_to_target_schema_in_dependency_order(run):
-    molgenis = run()
+def test_uploads_to_target_schema_in_dependency_order(run_mapping):
+    molgenis = run_mapping()
 
     target_tables = [upload.table for upload in molgenis.uploads if upload.schema == TARGET]
     assert target_tables == ['Samples srDNA', 'Collections', 'Individuals', 'Experiments srDNA']
 
 
-def test_uploads_samples_with_mapped_ontology_terms(run):
-    samples = run().upload_to(TARGET, 'Samples srDNA')
+def test_uploads_samples_with_mapped_ontology_terms(run_mapping):
+    samples = run_mapping().upload_to(TARGET, 'Samples srDNA')
 
     assert list(samples.columns) == [
         'tissue type', 'Sample_ID', 'individuals', 'id', 'affiliated networks', 'submitter']
@@ -129,8 +129,8 @@ def test_uploads_samples_with_mapped_ontology_terms(run):
     ]
 
 
-def test_uploads_experiments(run):
-    experiments = run().upload_to(TARGET, 'Experiments srDNA')
+def test_uploads_experiments(run_mapping):
+    experiments = run_mapping().upload_to(TARGET, 'Experiments srDNA')
 
     assert list(experiments.columns) == [
         'id', 'alternate ids', 'target enrichment kit', 'individuals', 'library strategy',
@@ -168,15 +168,15 @@ def test_uploads_experiments(run):
     ('ERDERA', None, 'ERDERA'),
     ('OTHER_PROJECT', None, ''),
 ])
-def test_maps_project_and_subproject_to_included_in_resources(run, project, subproject, expected):
-    molgenis = run([experiment('E1', 'P1', project=project, subproject=subproject)])
+def test_maps_project_and_subproject_to_included_in_resources(run_mapping, project, subproject, expected):
+    molgenis = run_mapping([experiment('E1', 'P1', project=project, subproject=subproject)])
 
     experiments = molgenis.upload_to(TARGET, 'Experiments srDNA')
     assert experiments['included in resources'].tolist() == [expected]
 
 
-def test_adds_projects_and_freezes_as_collections(run):
-    collections = run().upload_to(TARGET, 'Collections')
+def test_adds_projects_and_freezes_as_collections(run_mapping):
+    collections = run_mapping().upload_to(TARGET, 'Collections')
 
     assert rows(collections) == [
         {'id': 'ERDERA', 'name': 'ERDERA',
@@ -188,8 +188,8 @@ def test_adds_projects_and_freezes_as_collections(run):
     ]
 
 
-def test_sets_submitter_and_networks_on_all_individuals(run):
-    individuals = run().upload_to(TARGET, 'Individuals')
+def test_sets_submitter_and_networks_on_all_individuals(run_mapping):
+    individuals = run_mapping().upload_to(TARGET, 'Individuals')
 
     assert rows(individuals) == [
         {'id': 'P1', 'gender at birth': 'female',
@@ -201,8 +201,8 @@ def test_sets_submitter_and_networks_on_all_individuals(run):
     ]
 
 
-def test_reports_unmatched_ontology_values(run):
-    molgenis = run()
+def test_reports_unmatched_ontology_values(run_mapping):
+    molgenis = run_mapping()
 
     assert rows(molgenis.upload_to(MAPPINGS, 'Tissue types'), 'incoming value') == [
         {'incoming value': 'Skin', 'source': f'{SOURCE_PREFIX}tissue'}]
@@ -210,16 +210,16 @@ def test_reports_unmatched_ontology_values(run):
         {'incoming value': 'WGS', 'source': f'{SOURCE_PREFIX}library_strategy'}]
 
 
-def test_reports_nothing_when_all_ontology_values_match(run):
-    molgenis = run()
+def test_reports_nothing_when_all_ontology_values_match(run_mapping):
+    molgenis = run_mapping()
 
     for table in ('Erns', 'Library source'):
         uploads = molgenis.uploads_to(MAPPINGS, table)
         assert all(data.empty for data in uploads), table
 
 
-def test_adds_new_submitters_and_updates_parents_of_organisations(run):
-    organisations = run().upload_to(ONTOLOGIES, 'Organisations')
+def test_adds_new_submitters_and_updates_parents_of_organisations(run_mapping):
+    organisations = run_mapping().upload_to(ONTOLOGIES, 'Organisations')
 
     assert rows(organisations, 'name') == [
         {'name': 'Lab B', 'parent': 'University B'},
@@ -227,8 +227,8 @@ def test_adds_new_submitters_and_updates_parents_of_organisations(run):
     ]
 
 
-def test_adds_new_submitters_to_organisation_mappings(run):
-    organisation_mappings = run().upload_to(MAPPINGS, 'Organisations')
+def test_adds_new_submitters_to_organisation_mappings(run_mapping):
+    organisation_mappings = run_mapping().upload_to(MAPPINGS, 'Organisations')
 
     assert rows(organisation_mappings, 'incoming value') == [
         {'incoming value': 'Lab B', 'new value': 'University B', 'source': 'Owner'}]

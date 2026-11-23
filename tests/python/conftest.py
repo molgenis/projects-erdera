@@ -104,6 +104,6 @@ def molgenis(monkeypatch, tmp_path) -> FakeMolgenis:
 @pytest.fixture
 def run_script():
     """Run a script from the repository as `__main__`, as the script editor does."""
-    def run(relative_path: str):
+    def run_as_main(relative_path: str):
         runpy.run_path(str(REPO_ROOT / relative_path), run_name='__main__')
-    return run
+    return run_as_main
