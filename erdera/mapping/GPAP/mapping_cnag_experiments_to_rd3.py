@@ -193,10 +193,53 @@ def map_submitter_to_organisation(submitters: list):
 
     # return samples_srDNA
 
+def map_freezes(samples_srDNA: pd.DataFrame):
+    """Map the freeze information to collections"""
+
+    # find the subprojects that do not match the ERDERA freeze format
+    invalids = samples_srDNA.loc[
+        ~samples_srDNA["subproject"].str.contains(r"ERDERA_PF\d+", na=False),
+        "subproject"
+    ].drop_duplicates().dropna().to_list()
+    # log these subrojects
+    log.info('Found subproject not matching the ERDERA freeze format: %s',
+             invalids)
+    
+    # rename the subprojects
+    samples_srDNA["subproject"] = samples_srDNA["subproject"].str.extract(r"(ERDERA_PF\d+)")
+
+    # retrieve collections    
+    client = Client(
+            MOLGENIS_HOST,
+            token=MOLGENIS_TOKEN,
+            schema=MOLGENIS_HOST_SCHEMA_TARGET
+        )
+    collections = client.get(
+        table='Collections',
+        as_df=True,
+        columns='name')
+
+    # find the new freezes, to be added to the collections
+    new_freezes = [freeze for freeze in samples_srDNA['subproject'].unique().dropna() if freeze not in list(collections)]
+
+    if len(new_freezes) > 0: # if there is a new freeze/freezes
+        new_freezes = pd.DataFrame(new_freezes, columns=["name"])
+        new_freezes['id'] = new_freezes['name']
+        new_freezes['type'] = 'Registry'
+        new_freezes['description'] = 'Data freeze ' + new_freezes['name'].str.extract(r"ERDERA_PF(\d+)")[0]
+
+        log.info('Adding the following freezes to the collections: %s',
+                     new_freezes['name'])
+
+        # Upload to collections
+        client.save_table(table='Collections', data=new_freezes)
+
+    return samples_srDNA
+
 def upload_samples(client: Client, data: pd.DataFrame):
     """Build and import the sample metadata based on GPAP's experiments. """
 
-    samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID', 'ExperimentID', 'erns', 'Owner']]\
+    samples_srDNA = data[['tissue', 'Sample_ID', 'Participant_ID', 'ExperimentID', 'erns', 'Owner', 'project', 'subproject']]\
         .rename(columns={
             'tissue': 'tissue type',
             'Participant_ID': 'individuals',
@@ -230,26 +273,36 @@ def upload_samples(client: Client, data: pd.DataFrame):
     # remove rows without a RD3 ontology term equivalent
     samples_srDNA.loc[tmp, field_name] = np.nan
 
-    # create mapping per individual of the submitter and affiliated networks
-    mapping = (
-        samples_srDNA.groupby("individuals")
-       .agg({
-           "submitter": lambda x: ",".join(pd.unique(x.dropna().astype(str))),
-           "affiliated networks": lambda x: ",".join(pd.unique(x.dropna().astype(str)))
-       })
-       .to_dict("index")
+    # combine project and subproject from GPAP to included in resources in RD3
+    samples_srDNA['tmp'] = np.where(samples_srDNA['project'].str.contains(
+        'Solve-RD', na=False), 'Solve-RD', pd.NA)  # capture the Solve-RD experiments
+    samples_srDNA['tmp2'] = np.where(samples_srDNA['project'].str.contains(
+        'ERDERA', na=False), 'ERDERA', pd.NA)  # capture the ERDERA experiments
+    # rename the freeze information
+    samples_srDNA = map_freezes(samples_srDNA=samples_srDNA)
+    
+    # merge project and subproject
+    samples_srDNA['included in resources'] = samples_srDNA[['tmp', 'tmp2', 'subproject']].apply(
+        lambda x: ','.join(pd.unique(x.dropna())), axis=1
+    )
+    # drop the unused columns
+    samples_srDNA = samples_srDNA.drop(columns=['project', 'subproject', 'tmp', 'tmp2'])
+
+    # create a lookup df to set the submitter, ERNs, and resources in the experiments and individuals tables
+    lookup = (samples_srDNA[['id', 'individuals', 'submitter', 'affiliated networks', 'included in resources']]
+        .drop_duplicates()
     )
 
     # upload samples
     client.save_table(table='Samples srDNA', data=samples_srDNA)
 
-    return mapping
+    # return orgs_mapping, resources_mapping
+    return lookup
 
-def upload_srDNA_experiments(client: Client, data: pd.DataFrame, mapping: dict):
+def upload_srDNA_experiments(client: Client, data: pd.DataFrame, lookup: pd.DataFrame):
     """This function maps GPAP experiments to srDNA experiments in RD3"""
     srDNA = data[['ExperimentID', 'LocalExperimentID',
                   'kit',
-                  'project', 'subproject',
                   'Participant_ID',
                   'library_strategy',
                   'Sample_ID', 'library_source']]\
@@ -266,24 +319,6 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame, mapping: dict):
     # map (sub)projects
     # get the collections
     add_collections(client=client)
-
-    # combine project and subproject from GPAP to included in resources in RD3
-    srDNA['tmp'] = np.where(srDNA['project'].str.contains(
-        'Solve-RD', na=False), 'Solve-RD', pd.NA)  # capture the Solve-RD experiments
-    srDNA['tmp2'] = np.where(srDNA['project'].str.contains(
-        'ERDERA', na=False), 'ERDERA', pd.NA)  # capture the ERDERA experiments
-    # rename the freeze information
-    srDNA.loc[srDNA['subproject'].str.contains(
-        'ERDERA_PF1'), 'subproject'] = 'ERDERA_PF1'
-    srDNA.loc[srDNA['subproject'].str.contains(
-        r"ERDERA_PF2|TOPFANA_01|TOPFANA_02|TOPFANA_03|TOPFANA_04"), 'subproject'] = 'ERDERA_PF2'
-
-    # merge project and subproject
-    srDNA['included in resources'] = srDNA[['tmp', 'tmp2', 'subproject']].apply(
-        lambda x: ','.join(pd.unique(x.dropna())), axis=1
-    )
-    # drop the unused columns
-    srDNA = srDNA.drop(columns=['project', 'subproject', 'tmp', 'tmp2'])
 
     # map library strategy
     field_name = 'library strategy'
@@ -306,17 +341,23 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame, mapping: dict):
     srDNA.loc[tmp, field_name] = np.nan
 
     # set submitter
-    srDNA["submitter"] = srDNA["individuals"].map(
-        lambda x: mapping.get(x, {}).get("submitter")
+    srDNA['submitter'] = srDNA["id"].map(
+        lookup.set_index("id")["submitter"]
     )
-
+    
     # set affiliated networks (ERNs)
-    srDNA["affiliated networks"] = srDNA["individuals"].map(
-            lambda x: mapping.get(x, {}).get("affiliated networks")
-        )
+    srDNA['affiliated networks'] = srDNA["id"].map(
+        lookup.set_index("id")["affiliated networks"]
+    )
+    
+    # set resources
+    srDNA['included in resources'] = srDNA["id"].map(
+        lookup.set_index("id")["included in resources"]
+    )
     
     # add the organisations to the individuals table
-    asyncio.run(add_organisations_to_individuals(client=client, mapping = mapping))
+    asyncio.run(add_organisations_to_individuals(client=client, 
+                                                 lookup=lookup))
 
     # local experiment id
     srDNA['local experiment id'] = srDNA['id']
@@ -328,20 +369,35 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame, mapping: dict):
     client.save_table(table='Experiments srDNA', data=srDNA)
 
 
-async def add_organisations_to_individuals(client: Client, mapping: dict):
+async def add_organisations_to_individuals(client: Client, lookup: pd.DataFrame):
     """Add the submitting organisations to the individuals table"""
+    # get the individuals
     individuals = client.get(table='Individuals', as_df=True)
-    # set submitter
-    individuals["submitter"] = individuals["id"].map(
-        lambda x: mapping.get(x, {}).get("submitter")
+    # create an aggreagtion of the lookups for the individuals (since individuals can have multiple experiments/samples)
+    lookup_agg = (
+        lookup
+        .groupby("individuals", as_index=False)
+        .agg({ # make sure the elements in the lists are unique
+            "submitter": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t)),
+            "affiliated networks": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t)),
+            "included in resources": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t))
+            })
     )
-
+    # set submitter
+    individuals['submitter'] = individuals["id"].map(
+        lookup_agg.set_index("individuals")["submitter"]
+    )
+    
     # set affiliated networks (ERNs)
-    individuals["affiliated networks"] = individuals["id"].map(
-            lambda x: mapping.get(x, {}).get("affiliated networks")
+    individuals['affiliated networks'] = individuals["id"].map(
+            lookup_agg.set_index("individuals")["affiliated networks"]
         )
     
-    #client.save_table(table='Individuals', data=individuals)
+    # set included in resources
+    individuals['included in resources'] = individuals["id"].map(
+                lookup_agg.set_index("individuals")["included in resources"]
+            )
+    
     with tempfile.TemporaryDirectory() as tmp_dir:
         individuals.to_csv(f'{tmp_dir}/Individuals.csv', index=False)
 
@@ -354,7 +410,6 @@ async def add_organisations_to_individuals(client: Client, mapping: dict):
         # upload the zipped file
         await client.upload_file(schema=MOLGENIS_HOST_SCHEMA_TARGET, file_path=zip_file_name)
 
-
 if __name__ == "__main__":
 
     experiments = get_staging_area_experiments()
@@ -366,5 +421,6 @@ if __name__ == "__main__":
     )
 
     # build and import srDNA experiments and samples
-    mapping = upload_samples(client=db, data=experiments)
-    upload_srDNA_experiments(client=db, data=experiments, mapping = mapping)
+    lookup = upload_samples(client=db, data=experiments)
+    upload_srDNA_experiments(client=db, data=experiments, 
+                             lookup=lookup)
