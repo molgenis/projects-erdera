@@ -3,6 +3,8 @@
 The script is run as a whole against a fake MOLGENIS server. The tests describe
 the current behaviour, so that later changes to the script are deliberate.
 """
+import logging
+
 import pandas as pd
 import pytest
 
@@ -81,6 +83,7 @@ def seed(molgenis, experiments=None):
         'gender at birth': ['female', 'male', 'female'],
         'submitter': [None, None, 'Lab Z'],
         'affiliated networks': [None, None, 'ERN Z'],
+        'included in resources': [None, None, 'Collection Z'],
     }))
 
 
@@ -111,21 +114,26 @@ def test_uploads_to_target_schema_in_dependency_order(run_mapping):
     molgenis = run_mapping()
 
     target_tables = [upload.table for upload in molgenis.uploads if upload.schema == TARGET]
-    assert target_tables == ['Samples srDNA', 'Collections', 'Individuals', 'Experiments srDNA']
+    assert target_tables == [
+        'Collections', 'Samples srDNA', 'Collections', 'Individuals', 'Experiments srDNA']
 
 
 def test_uploads_samples_with_mapped_ontology_terms(run_mapping):
     samples = run_mapping().upload_to(TARGET, 'Samples srDNA')
 
     assert list(samples.columns) == [
-        'tissue type', 'Sample_ID', 'individuals', 'id', 'affiliated networks', 'submitter']
+        'tissue type', 'Sample_ID', 'individuals', 'id', 'affiliated networks', 'submitter',
+        'included in resources']
     assert rows(samples) == [
         {'tissue type': 'Whole blood', 'Sample_ID': 'sample-E1', 'individuals': 'P1', 'id': 'E1',
-         'affiliated networks': 'ERN RND', 'submitter': 'Lab A'},
+         'affiliated networks': 'ERN RND', 'submitter': 'Lab A',
+         'included in resources': 'ERDERA,ERDERA_PF1'},
         {'tissue type': None, 'Sample_ID': 'sample-E2', 'individuals': 'P1', 'id': 'E2',
-         'affiliated networks': 'ERN ITHACA', 'submitter': 'Lab B'},
+         'affiliated networks': 'ERN ITHACA', 'submitter': 'Lab B',
+         'included in resources': 'ERDERA,ERDERA_PF2'},
         {'tissue type': 'Whole blood', 'Sample_ID': 'sample-E3', 'individuals': 'P2', 'id': 'E3',
-         'affiliated networks': 'ERN RND', 'submitter': 'Lab A'},
+         'affiliated networks': 'ERN RND', 'submitter': 'Lab A',
+         'included in resources': 'Solve-RD'},
     ]
 
 
@@ -134,24 +142,21 @@ def test_uploads_experiments(run_mapping):
 
     assert list(experiments.columns) == [
         'id', 'alternate ids', 'target enrichment kit', 'individuals', 'library strategy',
-        'sample', 'library source', 'included in resources', 'submitter',
-        'affiliated networks', 'local experiment id']
+        'sample', 'library source', 'submitter', 'affiliated networks',
+        'included in resources', 'local experiment id']
     assert rows(experiments) == [
         {'id': 'E1', 'alternate ids': 'local-E1', 'target enrichment kit': 'Kit A',
          'individuals': 'P1', 'library strategy': 'Whole exome sequencing', 'sample': 'E1',
-         'library source': 'Genomic', 'included in resources': 'ERDERA,ERDERA_PF1',
-         'submitter': 'Lab A,Lab B', 'affiliated networks': 'ERN RND,ERN ITHACA',
-         'local experiment id': 'E1'},
+         'library source': 'Genomic', 'submitter': 'Lab A', 'affiliated networks': 'ERN RND',
+         'included in resources': 'ERDERA,ERDERA_PF1', 'local experiment id': 'E1'},
         {'id': 'E2', 'alternate ids': 'local-E2', 'target enrichment kit': 'Kit B',
          'individuals': 'P1', 'library strategy': None, 'sample': 'E2',
-         'library source': 'Genomic', 'included in resources': 'ERDERA,ERDERA_PF2',
-         'submitter': 'Lab A,Lab B', 'affiliated networks': 'ERN RND,ERN ITHACA',
-         'local experiment id': 'E2'},
+         'library source': 'Genomic', 'submitter': 'Lab B', 'affiliated networks': 'ERN ITHACA',
+         'included in resources': 'ERDERA,ERDERA_PF2', 'local experiment id': 'E2'},
         {'id': 'E3', 'alternate ids': 'local-E3', 'target enrichment kit': 'Kit A',
          'individuals': 'P2', 'library strategy': 'Whole exome sequencing', 'sample': 'E3',
-         'library source': 'Genomic', 'included in resources': 'Solve-RD,ERDERA_PF2',
-         'submitter': 'Lab A', 'affiliated networks': 'ERN RND',
-         'local experiment id': 'E3'},
+         'library source': 'Genomic', 'submitter': 'Lab A', 'affiliated networks': 'ERN RND',
+         'included in resources': 'Solve-RD', 'local experiment id': 'E3'},
     ]
 
 
@@ -159,24 +164,61 @@ def test_uploads_experiments(run_mapping):
     ('ERDERA', 'ERDERA_PF1', 'ERDERA,ERDERA_PF1'),
     ('ERDERA', 'ERDERA_PF1_batch2', 'ERDERA,ERDERA_PF1'),
     ('ERDERA', 'ERDERA_PF2', 'ERDERA,ERDERA_PF2'),
-    ('Solve-RD', 'TOPFANA_01', 'Solve-RD,ERDERA_PF2'),
-    ('Solve-RD', 'TOPFANA_02', 'Solve-RD,ERDERA_PF2'),
-    ('Solve-RD', 'TOPFANA_03', 'Solve-RD,ERDERA_PF2'),
-    ('Solve-RD', 'TOPFANA_04', 'Solve-RD,ERDERA_PF2'),
+    ('ERDERA', 'ERDERA_PF3', 'ERDERA,ERDERA_PF3'),
+    ('Solve-RD', 'TOPFANA_01', 'Solve-RD'),
+    ('Solve-RD', 'TOPFANA_02', 'Solve-RD'),
+    ('Solve-RD', 'TOPFANA_03', 'Solve-RD'),
+    ('Solve-RD', 'TOPFANA_04', 'Solve-RD'),
     ('Solve-RD ERDERA', 'ERDERA_PF2', 'Solve-RD,ERDERA,ERDERA_PF2'),
-    ('ERDERA', 'OTHER_SUBPROJECT', 'ERDERA,OTHER_SUBPROJECT'),
+    ('ERDERA', 'OTHER_SUBPROJECT', 'ERDERA'),
     ('ERDERA', None, 'ERDERA'),
     ('OTHER_PROJECT', None, ''),
 ])
-def test_maps_project_and_subproject_to_included_in_resources(run_mapping, project, subproject, expected):
+def test_maps_project_and_subproject_to_included_in_resources(
+        run_mapping, project, subproject, expected):
     molgenis = run_mapping([experiment('E1', 'P1', project=project, subproject=subproject)])
 
-    experiments = molgenis.upload_to(TARGET, 'Experiments srDNA')
-    assert experiments['included in resources'].tolist() == [expected]
+    for table in ('Samples srDNA', 'Experiments srDNA'):
+        uploaded = molgenis.upload_to(TARGET, table)
+        assert uploaded['included in resources'].tolist() == [expected], table
 
 
-def test_adds_projects_and_freezes_as_collections(run_mapping):
-    collections = run_mapping().upload_to(TARGET, 'Collections')
+def test_logs_subprojects_that_are_not_a_freeze(run_mapping, caplog):
+    caplog.set_level(logging.INFO)
+
+    run_mapping([
+        experiment('E1', 'P1', subproject='ERDERA_PF1'),
+        experiment('E2', 'P1', subproject='TOPFANA_01'),
+        experiment('E3', 'P2', subproject='TOPFANA_01'),
+        experiment('E4', 'P2', subproject=None),
+    ])
+
+    assert ("Found subproject not matching the ERDERA freeze format: ['TOPFANA_01']"
+            in caplog.messages)
+
+
+def test_adds_freezes_from_the_data_that_are_not_collections_yet(run_mapping):
+    molgenis = run_mapping([
+        experiment('E1', 'P1', subproject='ERDERA_PF1'),
+        experiment('E2', 'P1', subproject='ERDERA_PF3'),
+        experiment('E3', 'P2', subproject='ERDERA_PF3_batch2'),
+    ])
+
+    new_freezes = molgenis.uploads_to(TARGET, 'Collections')[0]
+    assert rows(new_freezes) == [
+        {'name': 'ERDERA_PF3', 'id': 'ERDERA_PF3', 'type': 'Registry',
+         'description': 'Data freeze 3'},
+    ]
+
+
+def test_adds_no_freezes_when_all_freezes_are_collections(run_mapping):
+    molgenis = run_mapping([experiment('E1', 'P1', subproject='ERDERA_PF1')])
+
+    assert len(molgenis.uploads_to(TARGET, 'Collections')) == 1
+
+
+def test_adds_projects_and_first_freezes_as_collections(run_mapping):
+    collections = run_mapping().uploads_to(TARGET, 'Collections')[-1]
 
     assert rows(collections) == [
         {'id': 'ERDERA', 'name': 'ERDERA',
@@ -188,17 +230,30 @@ def test_adds_projects_and_freezes_as_collections(run_mapping):
     ]
 
 
-def test_sets_submitter_and_networks_on_all_individuals(run_mapping):
+def test_sets_submitter_networks_and_resources_on_all_individuals(run_mapping):
     individuals = run_mapping().upload_to(TARGET, 'Individuals')
 
     assert rows(individuals) == [
-        {'id': 'P1', 'gender at birth': 'female',
-         'submitter': 'Lab A,Lab B', 'affiliated networks': 'ERN RND,ERN ITHACA'},
-        {'id': 'P2', 'gender at birth': 'male',
-         'submitter': 'Lab A', 'affiliated networks': 'ERN RND'},
-        {'id': 'P3', 'gender at birth': 'female',
-         'submitter': None, 'affiliated networks': None},
+        {'id': 'P1', 'gender at birth': 'female', 'submitter': 'Lab A,Lab B',
+         'affiliated networks': 'ERN RND,ERN ITHACA',
+         'included in resources': 'ERDERA,ERDERA_PF1,ERDERA_PF2'},
+        {'id': 'P2', 'gender at birth': 'male', 'submitter': 'Lab A',
+         'affiliated networks': 'ERN RND', 'included in resources': 'Solve-RD'},
+        {'id': 'P3', 'gender at birth': 'female', 'submitter': None,
+         'affiliated networks': None, 'included in resources': None},
     ]
+
+
+def test_combines_values_of_individuals_without_duplicates_or_empty_values(run_mapping):
+    individuals = run_mapping([
+        experiment('E1', 'P1', subproject='ERDERA_PF1'),
+        experiment('E2', 'P1', subproject='ERDERA_PF1'),
+        experiment('E3', 'P1', project='OTHER_PROJECT', subproject=None, erns=None),
+    ]).upload_to(TARGET, 'Individuals')
+
+    assert rows(individuals)[0] == {
+        'id': 'P1', 'gender at birth': 'female', 'submitter': 'Lab A',
+        'affiliated networks': 'ERN RND', 'included in resources': 'ERDERA,ERDERA_PF1'}
 
 
 def test_reports_unmatched_ontology_values(run_mapping):
