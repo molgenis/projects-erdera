@@ -3,8 +3,9 @@
 ## For deployment
 
 1. Copy the contents of this script into the script editor UI
-2. Copy the following requirements into the 'dependencies' field
-3. Save and run
+2. Uncomment the job parameter in the client initialisation in the main function
+3. Copy the following requirements into the 'dependencies' field
+4. Save and run
 
 ### Dependencies
 
@@ -417,7 +418,9 @@ if __name__ == "__main__":
     db = Client(
         MOLGENIS_HOST,
         schema=MOLGENIS_HOST_SCHEMA_TARGET,
-        token=MOLGENIS_TOKEN
+        token=MOLGENIS_TOKEN,
+        # uncomment when deploying the script remotely
+        job='${jobId}'
     )
 
     # build and import srDNA experiments and samples
