@@ -195,6 +195,16 @@ def map_submitter_to_organisation(submitters: list):
 
 def map_freezes(samples_srDNA: pd.DataFrame):
     """Map the freeze information to collections"""
+
+    # find the subprojects that do not match the ERDERA freeze format
+    invalids = samples_srDNA.loc[
+        ~samples_srDNA["subproject"].str.contains(r"ERDERA_PF\d+", na=False),
+        "subproject"
+    ].drop_duplicates().dropna().to_list()
+    # log these subrojects
+    log.info('Found subproject not matching the ERDERA freeze format: %s',
+             invalids)
+    
     # rename the subprojects
     samples_srDNA["subproject"] = samples_srDNA["subproject"].str.extract(r"(ERDERA_PF\d+)")
 
@@ -263,16 +273,6 @@ def upload_samples(client: Client, data: pd.DataFrame):
     # remove rows without a RD3 ontology term equivalent
     samples_srDNA.loc[tmp, field_name] = np.nan
 
-    # create mapping per individual of the submitter and affiliated networks
-    orgs_mapping = (
-        samples_srDNA.groupby("individuals")
-       .agg({
-           "submitter": lambda x: ",".join(pd.unique(x.dropna().astype(str))),
-           "affiliated networks": lambda x: ",".join(pd.unique(x.dropna().astype(str)))
-       })
-       .to_dict("index")
-    )
-
     # combine project and subproject from GPAP to included in resources in RD3
     samples_srDNA['tmp'] = np.where(samples_srDNA['project'].str.contains(
         'Solve-RD', na=False), 'Solve-RD', pd.NA)  # capture the Solve-RD experiments
@@ -288,20 +288,18 @@ def upload_samples(client: Client, data: pd.DataFrame):
     # drop the unused columns
     samples_srDNA = samples_srDNA.drop(columns=['project', 'subproject', 'tmp', 'tmp2'])
 
-    resources_mapping = (
-            samples_srDNA.groupby("individuals")
-           .agg({
-               "included in resources": lambda x: ",".join(pd.unique(x.dropna().astype(str)))
-           })
-           .to_dict("index")
-        )
+    # create a lookup df to set the submitter, ERNs, and resources in the experiments and individuals tables
+    lookup = (samples_srDNA[['id', 'individuals', 'submitter', 'affiliated networks', 'included in resources']]
+        .drop_duplicates()
+    )
 
     # upload samples
     client.save_table(table='Samples srDNA', data=samples_srDNA)
 
-    return orgs_mapping, resources_mapping
+    # return orgs_mapping, resources_mapping
+    return lookup
 
-def upload_srDNA_experiments(client: Client, data: pd.DataFrame, orgs_mapping: dict, resources_mapping: dict):
+def upload_srDNA_experiments(client: Client, data: pd.DataFrame, lookup: pd.DataFrame):
     """This function maps GPAP experiments to srDNA experiments in RD3"""
     srDNA = data[['ExperimentID', 'LocalExperimentID',
                   'kit',
@@ -343,24 +341,23 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame, orgs_mapping: d
     srDNA.loc[tmp, field_name] = np.nan
 
     # set submitter
-    srDNA["submitter"] = srDNA["individuals"].map(
-        lambda x: orgs_mapping.get(x, {}).get("submitter")
+    srDNA['submitter'] = srDNA["id"].map(
+        lookup.set_index("id")["submitter"]
     )
-
+    
     # set affiliated networks (ERNs)
-    srDNA["affiliated networks"] = srDNA["individuals"].map(
-            lambda x: orgs_mapping.get(x, {}).get("affiliated networks")
-        )
-
-     # set resources
-    srDNA["included in resources"] = srDNA["individuals"].map(
-            lambda x: resources_mapping.get(x, {}).get("included in resources")
-        )
-
+    srDNA['affiliated networks'] = srDNA["id"].map(
+        lookup.set_index("id")["affiliated networks"]
+    )
+    
+    # set resources
+    srDNA['included in resources'] = srDNA["id"].map(
+        lookup.set_index("id")["included in resources"]
+    )
+    
     # add the organisations to the individuals table
     asyncio.run(add_organisations_to_individuals(client=client, 
-                                                 orgs_mapping = orgs_mapping, 
-                                                 resources_mapping = resources_mapping))
+                                                 lookup=lookup))
 
     # local experiment id
     srDNA['local experiment id'] = srDNA['id']
@@ -372,24 +369,35 @@ def upload_srDNA_experiments(client: Client, data: pd.DataFrame, orgs_mapping: d
     client.save_table(table='Experiments srDNA', data=srDNA)
 
 
-async def add_organisations_to_individuals(client: Client, orgs_mapping: dict, resources_mapping: dict):
+async def add_organisations_to_individuals(client: Client, lookup: pd.DataFrame):
     """Add the submitting organisations to the individuals table"""
+    # get the individuals
     individuals = client.get(table='Individuals', as_df=True)
+    # create an aggreagtion of the lookups for the individuals (since individuals can have multiple experiments/samples)
+    lookup_agg = (
+        lookup
+        .groupby("individuals", as_index=False)
+        .agg({ # make sure the elements in the lists are unique
+            "submitter": lambda x: ",".join(pd.unique(",".join(x.dropna()).split(","))),
+            "affiliated networks": lambda x: ",".join(pd.unique(",".join(x.dropna()).split(","))),
+            "included in resources": lambda x: ",".join(pd.unique(",".join(x.dropna()).split(",")))
+            })
+    )
     # set submitter
-    individuals["submitter"] = individuals["id"].map(
-        lambda x: orgs_mapping.get(x, {}).get("submitter")
+    individuals['submitter'] = individuals["id"].map(
+        lookup_agg.set_index("individuals")["submitter"]
     )
-
+    
     # set affiliated networks (ERNs)
-    individuals["affiliated networks"] = individuals["id"].map(
-        lambda x: orgs_mapping.get(x, {}).get("affiliated networks")
-    )
-
+    individuals['affiliated networks'] = individuals["id"].map(
+            lookup_agg.set_index("individuals")["affiliated networks"]
+        )
+    
     # set included in resources
-    individuals["included in resources"] = individuals["id"].map(
-        lambda x: resources_mapping.get(x, {}).get("included in resources")
-    )
-
+    individuals['included in resources'] = individuals["id"].map(
+                lookup_agg.set_index("individuals")["included in resources"]
+            )
+    
     with tempfile.TemporaryDirectory() as tmp_dir:
         individuals.to_csv(f'{tmp_dir}/Individuals.csv', index=False)
 
@@ -413,7 +421,6 @@ if __name__ == "__main__":
     )
 
     # build and import srDNA experiments and samples
-    orgs_mapping, resources_mapping = upload_samples(client=db, data=experiments)
+    lookup = upload_samples(client=db, data=experiments)
     upload_srDNA_experiments(client=db, data=experiments, 
-                             orgs_mapping = orgs_mapping, 
-                             resources_mapping = resources_mapping)
+                             lookup=lookup)
