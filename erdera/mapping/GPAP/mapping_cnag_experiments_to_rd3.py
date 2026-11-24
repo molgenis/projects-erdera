@@ -379,8 +379,8 @@ async def add_organisations_to_individuals(client: Client, lookup: pd.DataFrame)
         .groupby("individuals", as_index=False)
         .agg({ # make sure the elements in the lists are unique
             "submitter": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t)),
-            "affiliated networks": lambda x: ",".join(pd.unique(",".join(x.dropna()).split(","))),
-            "included in resources": lambda x: ",".join(pd.unique(",".join(x.dropna()).split(",")))
+            "affiliated networks": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t)),
+            "included in resources": lambda x: ",".join(dict.fromkeys(t for t in ",".join(x.dropna()).split(",") if t))
             })
     )
     # set submitter
