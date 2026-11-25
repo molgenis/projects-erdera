@@ -17,6 +17,18 @@ yarn test
 yarn docs
 ```
 
+### Python tests
+
+Functional tests for the Python scripts in `./erdera/` are in `./tests/python/`. These tests run a script as a whole against a fake MOLGENIS server, so they do not need a MOLGENIS instance or credentials.
+
+```cli
+# install the test dependencies (in a virtual environment)
+pip install -r tests/python/requirements.txt
+
+# run the Python tests
+yarn test:python
+```
+
 ### ERDERA-RD3 Management
 
 Scripts for managing the ERDERA-RD3 instances are stored in the `./erdera/`. Many of these scripts require credentials to retrieve or import data. Create a `.env` file in the project root and create the following variables.
