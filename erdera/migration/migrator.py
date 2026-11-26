@@ -64,6 +64,7 @@ async def publish(staging_area: str, client: Client):
     # extract all data into a folder
     zf.extractall(path=data_directory)
 
+    has_data = False
     for file in Path(data_directory).iterdir():
         # do not migrate
         if file.name in ["molgenis.csv", "molgenis_members.csv", "molgenis_settings.csv"]:
@@ -74,16 +75,24 @@ async def publish(staging_area: str, client: Client):
         if len(data) == 0: # empty (no data  to migrate)
             os.remove(file)
             continue
+
+        # if there is no data in the staging area, the next steps can be skipped
+        has_data = True
         
         # check if there is any draft data
         if data['mg_draft'].any():
             log.warning(f'There are draft entries in {file.stem} of staging area {staging_area}. No data is migrated.')
             return # if this is the case, the data won't be migrated
-        
+
+    if not has_data:
+        return
+    
     # zip the folder and upload to the target database
     shutil.make_archive(f'{data_directory.parent}/data', 'zip', data_directory)
 
     # Upload zip to TARGET schema
+    log.info('Migrating data from %s to the central RD3 database',
+             staging_area)
     await client.upload_file(data_directory.parent / "data.zip", schema=TARGET)
 
     # delete the migrated records from the staging area by setting the mg_delete to true 
@@ -115,8 +124,8 @@ def get_staging_areas(client: Client):
 
     # should not be migrated
     exclude = {
-        "Staging area GPAP",
-        "Staging area EGA",
+        "Staging Area Gpap",
+        "Staging Area Ega",
         "Staging area ids",
     }
 
@@ -131,8 +140,8 @@ def publish_all():
     """
     Publish all data from the staging areas to the production RD3 database
     """
-    #client = Client(url=SERVER_URL, token=TOKEN, job="${jobId}") # use when running the script on a server
-    client = Client(url=SERVER_URL, token=TOKEN) # use when running the script locally
+    client = Client(url=SERVER_URL, token=TOKEN, job="${jobId}") # use when running the script on a server
+    #client = Client(url=SERVER_URL, token=TOKEN) # use when running the script locally
 
     staging_areas = get_staging_areas(client)
     
