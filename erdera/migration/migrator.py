@@ -41,6 +41,7 @@ TARGET = 'erdera' # production db
 logging.basicConfig(level='INFO', filename=OUTPUT_FILE)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("Molgenis EMX2 Pyclient").setLevel(logging.WARNING)
 log = logging.getLogger('publisher')
 
 async def publish(staging_area: str, client: Client):
